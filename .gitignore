@@ -1,0 +1,4 @@
+src/data/
+.env
+node_modules/
+.vscode/
