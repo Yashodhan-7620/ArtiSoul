@@ -59,6 +59,9 @@ const register = asyncHandler(async (req, res) => {
   });
 });
 
+
+
+
 // POST /api/auth/login
 // Body: { phone, password }
 // (Extra convenience route — not in the spec, but register() is useless
