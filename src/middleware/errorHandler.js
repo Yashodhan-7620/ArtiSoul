@@ -13,6 +13,11 @@ function errorHandler(err, req, res, next) {
     return res.status(400).json({ success: false, message: 'Invalid reference — related record does not exist' });
   }
 
+  // Multer rejects oversized uploads with its own error code
+  if (err.code === 'LIMIT_FILE_SIZE') {
+    return res.status(413).json({ success: false, message: 'Image is too large (max 5 MB)' });
+  }
+
   const status = err.status || 500;
   res.status(status).json({
     success: false,
