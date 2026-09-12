@@ -1,0 +1,27 @@
+{
+  "name": "artisoul",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Yashodhan-7620/ArtiSoul.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "bugs": {
+    "url": "https://github.com/Yashodhan-7620/ArtiSoul/issues"
+  },
+  "homepage": "https://github.com/Yashodhan-7620/ArtiSoul#readme",
+  "devDependencies": {
+    "concurrently": "^10.0.5"
+  },
+  "scripts": {
+    "backend": "npm start --prefix ./backend",
+    "frontend": "npm run dev --prefix ./frontend",
+    "dev": "concurrently -n BACKEND,FRONTEND -c blue,green \"npm run backend\" \"npm run frontend\""
+  }
+ 
+}
