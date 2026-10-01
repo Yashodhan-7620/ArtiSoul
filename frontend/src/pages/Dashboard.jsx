@@ -7,6 +7,7 @@ import { api } from '../lib/api';
 import { formatPrice } from '../lib/format';
 import { Container } from '../components/AppShell';
 import { useAuth } from '../context/AuthContext';
+import ChatWindow from '../components/ChatWindow';
 
 // Status pill colours
 function StatusPill({ status }) {
@@ -101,6 +102,8 @@ export default function Dashboard() {
   const [shops, setShops] = useState([]);
   const [products, setProducts] = useState([]);
   const [orders, setOrders] = useState([]);
+  const [conversations, setConversations] = useState([]);
+  const [selectedConversation, setSelectedConversation] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
 
@@ -121,6 +124,9 @@ export default function Dashboard() {
       // Fetch incoming orders for all shops
       const { data: shopOrders } = await api.orders.shop(token);
       setOrders(shopOrders);
+
+      const { data: shopConversations } = await api.chat.conversations(token);
+      setConversations(shopConversations);
     } catch (err) {
       setError(err.message);
     } finally {
@@ -245,6 +251,49 @@ export default function Dashboard() {
                 </div>
               </div>
             ))}
+
+            <section>
+              <div className="mb-3 flex items-baseline justify-between">
+                <h2 className="font-display text-[18px] font-semibold text-ink-800">Customer chats</h2>
+                <span className="text-[12.5px] text-ink-400">{conversations.length} total</span>
+              </div>
+              {conversations.length === 0 ? (
+                <div className="rounded-3xl border border-dashed border-cream-300 bg-white px-6 py-7 text-center">
+                  <p className="text-[14px] font-semibold text-ink-600">No chats yet</p>
+                  <p className="mx-auto mt-1 max-w-[30ch] text-[13px] leading-relaxed text-ink-400">
+                    Customer questions about your pieces will appear here.
+                  </p>
+                </div>
+              ) : (
+                <div className="space-y-2.5">
+                  {conversations.map((conversation) => (
+                    <button
+                      key={conversation.conversation_id}
+                      onClick={() => setSelectedConversation(conversation)}
+                      className="flex w-full items-center gap-3 rounded-2xl border border-cream-300 bg-white p-3 text-left transition hover:border-clay-200"
+                    >
+                      <span className="grid h-9 w-9 shrink-0 place-items-center rounded-xl bg-clay-50 text-clay-600">
+                        <Icon name="chat" className="h-4 w-4" />
+                      </span>
+                      <span className="min-w-0 flex-1">
+                        <span className="block truncate text-[14px] font-semibold text-ink-800">{conversation.customer_name}</span>
+                        <span className="mt-0.5 block truncate text-[12px] text-ink-400">{conversation.last_message || 'New conversation'}</span>
+                      </span>
+                      <Icon name="chevron" className="h-4 w-4 shrink-0 text-ink-400" />
+                    </button>
+                  ))}
+                </div>
+              )}
+              {selectedConversation && (
+                <ChatWindow
+                  key={selectedConversation.conversation_id}
+                  shopId={selectedConversation.shop_id}
+                  recipientName={selectedConversation.customer_name}
+                  existingConversation={selectedConversation}
+                  customerId={selectedConversation.customer_id}
+                />
+              )}
+            </section>
 
             <section>
               <div className="mb-3 flex items-baseline justify-between">

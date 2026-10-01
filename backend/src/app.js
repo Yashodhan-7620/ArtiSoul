@@ -8,6 +8,7 @@ const productRoutes = require('./routes/productRoutes');
 const shopRoutes = require('./routes/shopRoutes');
 const uploadRoutes = require('./routes/uploadRoutes');
 const orderRoutes = require('./routes/orderRoutes');
+const chatRoutes = require('./routes/chatRoutes');
 
 const app = express();
 
@@ -49,6 +50,7 @@ app.use('/api/products', productRoutes);
 app.use('/api/shops', shopRoutes);
 app.use('/api/uploads', uploadRoutes);
 app.use('/api/orders', orderRoutes);
+app.use('/api/chat', chatRoutes);
 
 // 404 for anything unmatched
 app.use((req, res) => {

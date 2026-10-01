@@ -161,6 +161,10 @@ photo beside the details instead of above them.
 | GET | `/api/shops/mine` | artisan | List your own shop(s) |
 | GET | `/api/products/:id` | none | Single product detail |
 | GET | `/api/products/shop/:shop_id` | none | All products for one shop |
+| GET | `/api/chat/conversations` | JWT | List the signed-in user's conversations |
+| POST | `/api/chat/shops/:shopId/conversation` | JWT | Open or reuse a shop conversation |
+| GET | `/api/chat/conversations/:id/messages` | JWT | Read messages in a conversation |
+| POST | `/api/chat/conversations/:id/messages` | JWT | Send a message |
 | POST | `/api/uploads/image` | artisan | Upload a product photo, returns its URL |
 | GET | `/api/health` | none | Uptime check |
 
@@ -192,6 +196,9 @@ curl -X POST http://localhost:5000/api/products/add \
 
 # 5. Customer discovers nearby products — no login needed
 curl "http://localhost:5000/api/products/nearby?lat=18.53&lng=73.85&radius=5"
+
+# 6. Apply the chat migration before using the chat window
+mysql -u root -p artisoul < artisoul_phase5_chat.sql
 ```
 
 ---

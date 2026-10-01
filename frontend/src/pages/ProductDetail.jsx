@@ -8,6 +8,7 @@ import { Container } from '../components/AppShell';
 import { api } from '../lib/api';
 import { formatPrice } from '../lib/format';
 import { useAuth } from '../context/AuthContext';
+import ChatWindow from '../components/ChatWindow';
 
 export default function ProductDetail() {
   const { id } = useParams();
@@ -200,6 +201,9 @@ export default function ProductDetail() {
           </div>
         </Container>
       </div>
+      {user?.role !== 'artisan' && (
+        <ChatWindow shopId={product.shop_id} recipientName={product.shop_name} />
+      )}
     </div>
   );
 }

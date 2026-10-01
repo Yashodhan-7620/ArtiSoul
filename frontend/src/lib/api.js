@@ -91,6 +91,24 @@ export const api = {
     updateStatus: (orderId, status, token) =>
       request(`/api/orders/${orderId}/status`, { method: 'PATCH', body: { status }, token }),
   },
+
+  chat: {
+    openShop: (shopId, token, customer_id) =>
+      request(`/api/chat/shops/${shopId}/conversation`, {
+        method: 'POST',
+        body: customer_id ? { customer_id } : undefined,
+        token,
+      }),
+    conversations: (token) => request('/api/chat/conversations', { token }),
+    messages: (conversationId, token) =>
+      request(`/api/chat/conversations/${conversationId}/messages`, { token }),
+    send: (conversationId, body, token) =>
+      request(`/api/chat/conversations/${conversationId}/messages`, {
+        method: 'POST',
+        body: { body },
+        token,
+      }),
+  },
 };
 
 export { BASE as API_BASE };

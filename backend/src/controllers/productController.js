@@ -118,7 +118,7 @@ const getNearbyProducts = asyncHandler(async (req, res) => {
 const getProductById = asyncHandler(async (req, res) => {
   const { id } = req.params;
   const [rows] = await pool.query(
-    `SELECT p.*, s.shop_name, s.latitude, s.longitude, s.address
+    `SELECT p.*, s.shop_name, s.artisan_id, s.latitude, s.longitude, s.address
      FROM Products p
      JOIN Shops s ON p.shop_id = s.shop_id
      WHERE p.product_id = ?`,

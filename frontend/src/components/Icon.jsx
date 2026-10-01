@@ -18,6 +18,7 @@ const PATHS = {
   chevron: 'M9 6l6 6-6 6',
   trash: 'M4 7h16M9 7V5h6v2m-8 0 1 13h8l1-13',
   refresh: 'M20 11a8 8 0 1 0-.6 4M20 5v6h-6',
+  chat: 'M20 11.5a7.5 7.5 0 0 1-8 7.5 8.8 8.8 0 0 1-3.5-.7L4 20l1.4-3.6A7.4 7.4 0 0 1 4 11.5 7.5 7.5 0 0 1 12 4a7.5 7.5 0 0 1 8 7.5Z',
 };
 
 export default function Icon({ name, className = 'h-5 w-5', strokeWidth = 1.75, ...rest }) {
