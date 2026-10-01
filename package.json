@@ -23,5 +23,4 @@
     "frontend": "npm run dev --prefix ./frontend",
     "dev": "concurrently -n BACKEND,FRONTEND -c blue,green \"npm run backend\" \"npm run frontend\""
   }
- 
 }
