@@ -30,8 +30,12 @@ const register = asyncHandler(async (req, res) => {
     return res.status(400).json({ success: false, message: 'phone must be 10-15 digits' });
   }
 
-  if (password.length < 6) {
-    return res.status(400).json({ success: false, message: 'password must be at least 6 characters' });
+  const strongPasswordRegex = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[^A-Za-z0-9]).{8,}$/;
+
+  if (!password || !strongPasswordRegex.test(password)) {
+    return res.status(400).json({
+      error: 'Password must be at least 8 characters and include uppercase, lowercase, number, and special character.',
+    });
   }
 
   const [existing] = await pool.query('SELECT user_id FROM Users WHERE phone = ?', [phone]);
