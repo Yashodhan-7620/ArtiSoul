@@ -7,6 +7,7 @@ import { AuthProvider } from './context/AuthContext';
 
 import Account from './pages/Account';
 import AddProduct from './pages/AddProduct';
+import Checkout from './pages/Checkout';
 import CreateShop from './pages/CreateShop';
 import Dashboard from './pages/Dashboard';
 import Feed from './pages/Feed';
@@ -34,6 +35,14 @@ function Shell() {
             needs no token, and a customer shouldn't have to sign up to look. */}
         <Route path="/feed" element={<Feed />} />
         <Route path="/product/:id" element={<ProductDetail />} />
+        <Route
+          path="/checkout/:id"
+          element={
+            <ProtectedRoute>
+              <Checkout />
+            </ProtectedRoute>
+          }
+        />
         <Route path="/account" element={<Account />} />
 
         <Route

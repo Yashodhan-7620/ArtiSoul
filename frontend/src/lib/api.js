@@ -55,6 +55,9 @@ export const api = {
   shops: {
     create: (body, token) => request('/api/shops/create', { method: 'POST', body, token }),
     mine: (token) => request('/api/shops/mine', { token }),
+    updateQr: (upi_qr_url, token) =>
+      request('/api/shops/my-qr', { method: 'PUT', body: { upi_qr_url }, token }),
+    getQr: (shopId) => request(`/api/shops/qr/${shopId}`),
   },
 
   products: {
@@ -77,9 +80,15 @@ export const api = {
   },
 
   orders: {
-    // Customer places an order for a product
-    create: (product_id, token, quantity = 1) =>
-      request('/api/orders', { method: 'POST', body: { product_id, quantity }, token }),
+    // Supports full checkout payload object: api.orders.create(payload, token)
+    // as well as legacy signature: api.orders.create(product_id, token, quantity)
+    create: (payloadOrProductId, token, quantity = 1) => {
+      const body =
+        typeof payloadOrProductId === 'object' && payloadOrProductId !== null
+          ? payloadOrProductId
+          : { product_id: payloadOrProductId, quantity };
+      return request('/api/orders', { method: 'POST', body, token });
+    },
 
     // Customer fetches their own purchase history
     mine: (token) => request('/api/orders/mine', { token }),
@@ -87,9 +96,13 @@ export const api = {
     // Artisan fetches all orders incoming to their shop(s)
     shop: (token) => request('/api/orders/shop', { token }),
 
-    // Artisan marks an order Delivered / Cancelled
-    updateStatus: (orderId, status, token) =>
-      request(`/api/orders/${orderId}/status`, { method: 'PATCH', body: { status }, token }),
+    // Artisan marks an order Delivered / Cancelled (and optionally updates payment_status)
+    updateStatus: (orderId, status, token, payment_status) =>
+      request(`/api/orders/${orderId}/status`, {
+        method: 'PATCH',
+        body: payment_status ? { status, payment_status } : { status },
+        token,
+      }),
   },
 
   chat: {

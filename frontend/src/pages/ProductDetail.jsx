@@ -13,31 +13,18 @@ import ChatWindow from '../components/ChatWindow';
 export default function ProductDetail() {
   const { id } = useParams();
   const navigate = useNavigate();
-  const { user, token } = useAuth();
+  const { user } = useAuth();
   const [product, setProduct] = useState(null);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(true);
 
-  // Checkout state
-  const [buying, setBuying] = useState(false);
-  const [orderPlaced, setOrderPlaced] = useState(false);
-  const [buyError, setBuyError] = useState('');
-
-  const handleBuyNow = async () => {
+  const handleBuyNow = () => {
+    const targetProductId = product?.product_id || id;
     if (!user) {
-      navigate('/login', { state: { redirectTo: `/product/${id}` } });
+      navigate('/login', { state: { from: `/checkout/${targetProductId}` } });
       return;
     }
-    setBuying(true);
-    setBuyError('');
-    try {
-      await api.orders.create(product.product_id, token, 1);
-      setOrderPlaced(true);
-    } catch (err) {
-      setBuyError(err.message || 'Could not place order — please try again.');
-    } finally {
-      setBuying(false);
-    }
+    navigate(`/checkout/${targetProductId}`);
   };
 
   useEffect(() => {
@@ -74,43 +61,17 @@ export default function ProductDetail() {
     return (
       <div className="flex min-h-0 flex-1 flex-col">
         <TopBar title="Product" back />
-        <EmptyState icon="alert" title="Not found" message={error || 'This product no longer exists.'} />
+        <EmptyState
+          icon="alert"
+          title="Not found"
+          message={error || 'This product no longer exists.'}
+        />
       </div>
     );
   }
 
   const soldOut = product.stock_status === 'out_of_stock';
   const mapsUrl = `https://www.google.com/maps/search/?api=1&query=${product.latitude},${product.longitude}`;
-
-  // ── Order success screen ──────────────────────────────────────────────────
-  if (orderPlaced) {
-    return (
-      <div className="flex min-h-0 flex-1 flex-col">
-        <TopBar title="Order placed" back />
-        <div className="flex flex-1 flex-col items-center justify-center gap-5 px-8 text-center">
-          <div className="grid h-20 w-20 place-items-center rounded-3xl bg-sage-100 text-sage-600 text-5xl">
-            ✅
-          </div>
-          <div>
-            <h1 className="font-display text-[22px] font-semibold text-ink-900">
-              Payment Successful!
-            </h1>
-            <p className="mt-2 text-[14.5px] leading-relaxed text-ink-500">
-              Your order is on its way to the artisan.
-            </p>
-          </div>
-          <div className="flex flex-col gap-2.5 w-full max-w-[16rem]">
-            <Button onClick={() => navigate('/feed')} className="w-full">
-              Back to Feed
-            </Button>
-            <Button variant="secondary" onClick={() => navigate('/account')} className="w-full">
-              View my orders
-            </Button>
-          </div>
-        </div>
-      </div>
-    );
-  }
 
   return (
     <div className="flex min-h-0 flex-1 flex-col">
@@ -121,7 +82,11 @@ export default function ProductDetail() {
         <Container className="md:grid md:grid-cols-2 md:items-start md:gap-10">
           <div className="relative aspect-square w-full overflow-hidden bg-gradient-to-br from-clay-100 to-cream-300 md:sticky md:top-4 md:rounded-3xl">
             {product.image_url ? (
-              <img src={product.image_url} alt={product.name} className="h-full w-full object-cover" />
+              <img
+                src={product.image_url}
+                alt={product.name}
+                className="h-full w-full object-cover"
+              />
             ) : (
               <div className="grid h-full w-full place-items-center text-clay-400/60">
                 <Icon name="box" className="h-14 w-14" strokeWidth={1.2} />
@@ -158,7 +123,9 @@ export default function ProductDetail() {
             )}
 
             <div className="rounded-3xl border border-cream-300 bg-white p-4 md:p-5">
-              <p className="text-[11px] font-bold uppercase tracking-[0.1em] text-ink-400">Made by</p>
+              <p className="text-[11px] font-bold uppercase tracking-[0.1em] text-ink-400">
+                Made by
+              </p>
               <p className="mt-1.5 font-display text-[18px] font-semibold text-ink-800 md:text-[20px]">
                 {product.shop_name}
               </p>
@@ -179,19 +146,16 @@ export default function ProductDetail() {
               </a>
             </div>
 
-            {/* ── Buy Now ──────────────────────────────────────────────── */}
+            {/* ── Buy Now -> Navigates to Checkout ─────────────────────── */}
             <div className="space-y-2">
               <Button
                 id="buy-now-btn"
                 onClick={handleBuyNow}
-                disabled={buying || soldOut}
+                disabled={soldOut}
                 className="w-full"
               >
-                {buying ? 'Placing order…' : soldOut ? 'Out of Stock' : 'Buy Now'}
+                {soldOut ? 'Out of Stock' : 'Buy Now'}
               </Button>
-              {buyError && (
-                <p className="text-center text-[12.5px] text-clay-600">{buyError}</p>
-              )}
               {!user && (
                 <p className="px-1 text-center text-[12px] text-ink-400">
                   You'll be asked to log in first.

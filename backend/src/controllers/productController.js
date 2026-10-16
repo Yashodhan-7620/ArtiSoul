@@ -115,10 +115,11 @@ const getNearbyProducts = asyncHandler(async (req, res) => {
 });
 
 // GET /api/products/:id (extra convenience route — product detail page)
+// GET /api/products/:id (extra convenience route - product detail page)
 const getProductById = asyncHandler(async (req, res) => {
   const { id } = req.params;
   const [rows] = await pool.query(
-    `SELECT p.*, s.shop_name, s.artisan_id, s.latitude, s.longitude, s.address
+    `SELECT p.*, s.shop_name, s.address, s.latitude, s.longitude, s.upi_qr_url
      FROM Products p
      JOIN Shops s ON p.shop_id = s.shop_id
      WHERE p.product_id = ?`,

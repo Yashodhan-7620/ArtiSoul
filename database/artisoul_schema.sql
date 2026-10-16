@@ -31,6 +31,9 @@ CREATE TABLE IF NOT EXISTS Shops (
   FOREIGN KEY (artisan_id) REFERENCES Users(user_id) ON DELETE CASCADE
 ) ENGINE=InnoDB;
 
+ALTER TABLE shops
+  ADD COLUMN upi_qr_url VARCHAR(500) DEFAULT NULL;
+
 -- ─── Products ────────────────────────────────────────────────────────────────
 CREATE TABLE IF NOT EXISTS Products (
   product_id   INT UNSIGNED    NOT NULL AUTO_INCREMENT,
