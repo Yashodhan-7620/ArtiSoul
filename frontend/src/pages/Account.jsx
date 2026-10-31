@@ -115,7 +115,7 @@ export default function Account() {
               {apiUp === null ? 'Checking API…' : apiUp ? 'API connected' : 'API unreachable'}
             </span>
           </div>
-          <p className="mt-1.5 break-all pl-[18px] text-[12px] text-ink-400">{API_BASE}</p>
+          <p className="mt-1.5 break-all pl-[18px] text-[12px] text-ink-400">{API_BASE || window.location.origin}</p>
         </div>
 
         {/* My Orders — customer purchase history */}

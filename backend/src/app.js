@@ -12,6 +12,10 @@ const chatRoutes = require('./routes/chatRoutes');
 
 const app = express();
 
+// Behind the Vite proxy / tunnel, so req.protocol and req.get('host') reflect
+// the public address (used to build uploaded-file URLs).
+app.set('trust proxy', true);
+
 // The Phase 3 React app runs on a different origin (Vite dev server on :5173),
 // so the browser blocks every API call unless we opt in here.
 // CORS_ORIGIN is a comma-separated allow-list; unset means "allow anything"

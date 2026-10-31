@@ -2,7 +2,7 @@ const { pool } = require('../config/db');
 const asyncHandler = require('../utils/asyncHandler');
 
 const ANGLES = ['front', 'right', 'back', 'left', 'top', 'bottom'];
-const isUrl = (u) => typeof u === 'string' && /^https?:\/\//.test(u);
+const isUrl = (u) => typeof u === 'string' && /^(https?:\/\/|\/uploads\/)/.test(u);
 
 // Validates the optional 360°/3D/gallery payload shared by add and update.
 function parseExtras(body) {
@@ -13,7 +13,7 @@ function parseExtras(body) {
     return { error: '360° view needs front, right, back and left photos' };
   }
   const model_url =
-    typeof body.model_url === 'string' && /^https?:\/\/.+\.glb$/i.test(body.model_url)
+    typeof body.model_url === 'string' && /^(https?:\/\/|\/uploads\/).+\.glb$/i.test(body.model_url)
       ? body.model_url.slice(0, 500)
       : null;
   const media = (Array.isArray(body.media) ? body.media : [])

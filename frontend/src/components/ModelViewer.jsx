@@ -1,4 +1,40 @@
 import { useEffect, useRef, useState } from 'react';
+import QRCode from 'qrcode';
+
+const IS_MOBILE =
+  /Android|iPhone|iPad|iPod/i.test(navigator.userAgent) ||
+  (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+
+// Desktop-only: a QR code that opens this same page on the customer's phone.
+function PhoneQr() {
+  const [dataUrl, setDataUrl] = useState('');
+  const base = (import.meta.env.VITE_PUBLIC_URL || window.location.origin).replace(/\/$/, '');
+  const link = `${base}${window.location.pathname}${window.location.search}`;
+  const isLocal = /^(localhost|127\.|\[?::1)/.test(new URL(link).hostname);
+
+  useEffect(() => {
+    let cancelled = false;
+    QRCode.toDataURL(link, { margin: 1, width: 200 }).then((url) => !cancelled && setDataUrl(url));
+    return () => {
+      cancelled = true;
+    };
+  }, [link]);
+
+  return (
+    <div className="flex items-center gap-4 rounded-2xl border border-cream-300 bg-white p-3">
+      {dataUrl && <img src={dataUrl} alt="QR code to open this product on your phone" className="h-28 w-28 shrink-0" />}
+      <div className="text-[12.5px] leading-relaxed text-ink-500">
+        <p className="text-[13.5px] font-semibold text-ink-800">Open on your phone for AR</p>
+        <p>Scan this code with your phone camera, then choose “View in your room”.</p>
+        {isLocal && (
+          <p className="mt-1 font-medium text-clay-600">
+            This address only works on this computer. Open the site through its public https link to make the code work on a phone.
+          </p>
+        )}
+      </div>
+    </div>
+  );
+}
 
 // Loaded on demand so the 3D library only downloads when a customer picks it.
 export default function ModelViewer({ src, name, room = false }) {
@@ -106,6 +142,7 @@ export default function ModelViewer({ src, name, room = false }) {
           </button>
         </div>
       )}
+      {room && !IS_MOBILE && !canAR && <PhoneQr />}
       {camError && <p className="text-[12.5px] text-clay-600">{camError}</p>}
       <p className="text-center text-[12px] text-ink-400">
         {room
