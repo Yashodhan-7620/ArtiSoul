@@ -49,4 +49,52 @@ router.post('/image', verifyToken, requireRole('artisan'), upload.single('image'
   });
 });
 
+const MEDIA_ALLOWED = [...ALLOWED, 'video/mp4', 'video/webm'];
+const mediaUpload = multer({
+  storage,
+  limits: { fileSize: 30 * 1024 * 1024 }, // 30 MB (short clips)
+  fileFilter: (req, file, cb) => {
+    if (!MEDIA_ALLOWED.includes(file.mimetype)) {
+      return cb(Object.assign(new Error('Only images or MP4/WEBM videos are allowed'), { status: 400 }));
+    }
+    cb(null, true);
+  },
+});
+
+// POST /api/uploads/media  (multipart/form-data, field name: "media")
+router.post('/media', verifyToken, requireRole('artisan'), mediaUpload.single('media'), (req, res) => {
+  if (!req.file) {
+    return res.status(400).json({ success: false, message: 'No file received (expected field "media")' });
+  }
+  res.status(201).json({
+    success: true,
+    data: {
+      url: `${req.protocol}://${req.get('host')}/uploads/${req.file.filename}`,
+      media_type: req.file.mimetype.startsWith('video/') ? 'video' : 'image',
+    },
+  });
+});
+
+const modelUpload = multer({
+  storage,
+  limits: { fileSize: 30 * 1024 * 1024 }, // 30 MB
+  fileFilter: (req, file, cb) => {
+    if (path.extname(file.originalname).toLowerCase() !== '.glb') {
+      return cb(Object.assign(new Error('Only .glb 3D models are allowed'), { status: 400 }));
+    }
+    cb(null, true);
+  },
+});
+
+// POST /api/uploads/model  (multipart/form-data, field name: "model")
+router.post('/model', verifyToken, requireRole('artisan'), modelUpload.single('model'), (req, res) => {
+  if (!req.file) {
+    return res.status(400).json({ success: false, message: 'No file received (expected field "model")' });
+  }
+  res.status(201).json({
+    success: true,
+    data: { model_url: `${req.protocol}://${req.get('host')}/uploads/${req.file.filename}` },
+  });
+});
+
 module.exports = router;

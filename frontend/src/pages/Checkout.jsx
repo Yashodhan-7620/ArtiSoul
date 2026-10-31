@@ -165,7 +165,7 @@ export default function Checkout() {
                         onClick={() => setQuantity((q) => q - 1)}
                         className="h-8 w-8 rounded-full bg-cream-200 disabled:opacity-40">−</button>
                       <span className="w-4 text-center font-semibold">{quantity}</span>
-                      <button type="button" aria-label="Increase" disabled={quantity >= 20}
+                      <button type="button" aria-label="Increase" disabled={quantity >= Math.min(20, product.stock_quantity ?? 20)}
                         onClick={() => setQuantity((q) => q + 1)}
                         className="h-8 w-8 rounded-full bg-cream-200 disabled:opacity-40">+</button>
                     </div>

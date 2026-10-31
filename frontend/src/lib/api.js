@@ -65,10 +65,22 @@ export const api = {
       return request(`/api/products/nearby?${qs}`);
     },
     byId: (id) => request(`/api/products/${id}`),
+    update: (id, body, token) => request(`/api/products/${id}`, { method: 'PUT', body, token }),
+    remove: (id, token) => request(`/api/products/${id}`, { method: 'DELETE', token }),
     byShop: (shopId) => request(`/api/products/shop/${shopId}`),
   },
 
   uploads: {
+    model: (file, token) => {
+      const form = new FormData();
+      form.append('model', file);
+      return request('/api/uploads/model', { method: 'POST', body: form, token, form: true });
+    },
+    media: (file, token) => {
+      const form = new FormData();
+      form.append('media', file);
+      return request('/api/uploads/media', { method: 'POST', body: form, token, form: true });
+    },
     image: (file, token) => {
       const form = new FormData();
       form.append('image', file);

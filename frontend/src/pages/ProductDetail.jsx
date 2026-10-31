@@ -9,6 +9,7 @@ import { api } from '../lib/api';
 import { formatPrice } from '../lib/format';
 import { useAuth } from '../context/AuthContext';
 import ChatWindow from '../components/ChatWindow';
+import PreviewPanel from '../components/PreviewPanel';
 
 export default function ProductDetail() {
   const { id } = useParams();
@@ -105,6 +106,9 @@ export default function ProductDetail() {
               <p className="mt-2 font-display text-[24px] font-semibold text-clay-600 md:text-[28px]">
                 {formatPrice(product.price)}
               </p>
+              {!soldOut && product.stock_quantity > 0 && product.stock_quantity <= 5 && (
+                <p className="mt-1 text-[13px] font-semibold text-clay-600">Only {product.stock_quantity} left</p>
+              )}
             </div>
 
             {product.description && (
@@ -136,6 +140,8 @@ export default function ProductDetail() {
             </div>
 
             {/* ── Buy Now ──────────────────────────────────────────────── */}
+            {/* ── Preview gallery + Buy Now ── */}
+            <PreviewPanel product={product} />
             <div className="space-y-2">
               <Button
                 id="buy-now-btn"

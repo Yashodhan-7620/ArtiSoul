@@ -1,5 +1,6 @@
 const { pool } = require('../config/db');
 const asyncHandler = require('../utils/asyncHandler');
+const { reserveStock, releaseStock } = require('../utils/stock');
 
 // POST /api/orders
 // Auth: customer only.
@@ -26,11 +27,21 @@ const createOrder = asyncHandler(async (req, res) => {
     return res.status(409).json({ success: false, message: 'Product is out of stock' });
   }
 
-  const [result] = await pool.query(
-    `INSERT INTO Orders (customer_id, product_id, shop_id, quantity, price_at_purchase, status)
-     VALUES (?, ?, ?, ?, ?, 'Pending')`,
-    [customer_id, product.product_id, product.shop_id, quantity, product.price]
-  );
+  if (!(await reserveStock(product.product_id, quantity))) {
+    return res.status(409).json({ success: false, message: 'Not enough stock available' });
+  }
+
+  let result;
+  try {
+    [result] = await pool.query(
+      `INSERT INTO Orders (customer_id, product_id, shop_id, quantity, price_at_purchase, status)
+       VALUES (?, ?, ?, ?, ?, 'Pending')`,
+      [customer_id, product.product_id, product.shop_id, quantity, product.price]
+    );
+  } catch (err) {
+    await releaseStock(product.product_id, quantity);
+    throw err;
+  }
 
   const [[order]] = await pool.query('SELECT * FROM Orders WHERE order_id = ?', [result.insertId]);
 
@@ -89,7 +100,7 @@ const updateOrderStatus = asyncHandler(async (req, res) => {
 
   // Verify the order belongs to a shop owned by this artisan
   const [[order]] = await pool.query(
-    `SELECT o.order_id FROM Orders o
+    `SELECT o.order_id, o.product_id, o.quantity, o.status AS current_status FROM Orders o
      JOIN Shops s ON s.shop_id = o.shop_id
      WHERE o.order_id = ? AND s.artisan_id = ?`,
     [req.params.id, req.user.user_id]
@@ -100,6 +111,12 @@ const updateOrderStatus = asyncHandler(async (req, res) => {
   }
 
   await pool.query('UPDATE Orders SET status = ? WHERE order_id = ?', [status, req.params.id]);
+  // Cancelling returns the units to stock.
+  if (status === 'Cancelled' && order.current_status !== 'Cancelled') {
+    await releaseStock(order.product_id, order.quantity);
+  } else if (order.current_status === 'Cancelled' && status !== 'Cancelled') {
+    await reserveStock(order.product_id, order.quantity);
+  }
   res.json({ success: true, data: { order_id: order.order_id, status } });
 });
 

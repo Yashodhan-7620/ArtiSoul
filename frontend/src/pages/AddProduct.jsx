@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useParams } from 'react-router-dom';
 import Button from '../components/Button';
 import EmptyState from '../components/EmptyState';
 import Icon from '../components/Icon';
@@ -12,12 +12,27 @@ import { useToast } from '../components/Toast';
 import { Container } from '../components/AppShell';
 
 const MAX_BYTES = 5 * 1024 * 1024;
+const MAX_MEDIA = 8;
+const VIEW_ANGLES = [
+  { id: 'front', label: 'Front', required: true },
+  { id: 'right', label: 'Right side', required: true },
+  { id: 'back', label: 'Back', required: true },
+  { id: 'left', label: 'Left side', required: true },
+  { id: 'top', label: 'Top', required: false },
+  { id: 'bottom', label: 'Bottom', required: false },
+];
+const MAX_VIDEO_BYTES = 30 * 1024 * 1024;
 
 export default function AddProduct() {
   const { token } = useAuth();
   const navigate = useNavigate();
+  const { id: editId } = useParams();
+  const editing = Boolean(editId);
   const toast = useToast();
   const fileRef = useRef(null);
+  const [existingMedia, setExistingMedia] = useState([]);
+  const [existingViews, setExistingViews] = useState({});
+  const [existingModel, setExistingModel] = useState(null);
 
   const [shops, setShops] = useState([]);
   const [shopsLoading, setShopsLoading] = useState(true);
@@ -33,9 +48,14 @@ export default function AddProduct() {
     price: '',
     category: '',
     description: '',
-    stock_status: 'in_stock',
+    stock_quantity: '1',
   });
   const [error, setError] = useState('');
+  const [extras, setExtras] = useState([]);
+  const [enable360, setEnable360] = useState(false);
+  const [views, setViews] = useState({});
+  const [glb, setGlb] = useState(null);
+  const extraRef = useRef(null);
   const [stage, setStage] = useState(null); // 'uploading' | 'saving'
 
   const set = (key) => (e) => setForm((f) => ({ ...f, [key]: e.target.value }));
@@ -50,6 +70,31 @@ export default function AddProduct() {
       .catch((err) => setError(err.message))
       .finally(() => setShopsLoading(false));
   }, [token]);
+
+  useEffect(() => {
+    if (!editId) return;
+    api.products
+      .byId(editId)
+      .then(({ data: p }) => {
+        setForm({
+          shop_id: String(p.shop_id),
+          name: p.name || '',
+          price: String(p.price ?? ''),
+          category: p.category || '',
+          description: p.description || '',
+          stock_quantity: String(p.stock_quantity ?? 0),
+        });
+        if (p.image_url) {
+          setUseUrl(true);
+          setImageUrlInput(p.image_url);
+        }
+        setExistingMedia(p.media || []);
+        setExistingViews(p.views360 || {});
+        setExistingModel(p.model_url || null);
+        setEnable360(Boolean(p.view360_enabled));
+      })
+      .catch((err) => setError(err.message));
+  }, [editId]);
 
   // Revoke the object URL when it's replaced or the screen unmounts,
   // otherwise every re-pick leaks a blob.
@@ -80,6 +125,35 @@ export default function AddProduct() {
     if (fileRef.current) fileRef.current.value = '';
   }
 
+  function handleExtras(fileList) {
+    const next = [...extras];
+    for (const f of Array.from(fileList || [])) {
+      const isVideo = f.type.startsWith('video/');
+      if (!isVideo && !f.type.startsWith('image/')) {
+        toast.error(`${f.name} is not an image or video`);
+        continue;
+      }
+      if (f.size > (isVideo ? MAX_VIDEO_BYTES : MAX_BYTES)) {
+        toast.error(`${f.name} is too large (${isVideo ? '30' : '5'} MB max)`);
+        continue;
+      }
+      if (next.length + existingMedia.length >= MAX_MEDIA) {
+        toast.error(`Up to ${MAX_MEDIA} extra files`);
+        break;
+      }
+      next.push(f);
+    }
+    setExtras(next);
+    if (extraRef.current) extraRef.current.value = '';
+  }
+
+  function handleView(angle, picked) {
+    if (!picked) return;
+    if (!picked.type.startsWith('image/')) return toast.error('That file is not an image');
+    if (picked.size > MAX_BYTES) return toast.error('Image must be under 5 MB');
+    setViews((v) => ({ ...v, [angle]: picked }));
+  }
+
   async function handleSubmit(e) {
     e.preventDefault();
     setError('');
@@ -88,6 +162,13 @@ export default function AddProduct() {
     if (!form.name.trim()) return setError('Give the piece a name');
     const price = Number(form.price);
     if (!Number.isFinite(price) || price < 0) return setError('Enter a valid price');
+    const stock_quantity = Number(form.stock_quantity);
+    if (!Number.isInteger(stock_quantity) || stock_quantity < 0) {
+      return setError('Quantity must be a whole number, 0 or more');
+    }
+    if (enable360 && !VIEW_ANGLES.filter((a) => a.required).every((a) => views[a.id] || existingViews[a.id])) {
+      return setError('360° view needs the front, right, back and left photos');
+    }
 
     try {
       let image_url = useUrl ? imageUrlInput.trim() || null : null;
@@ -100,21 +181,52 @@ export default function AddProduct() {
         image_url = data.image_url;
       }
 
-      setStage('saving');
-      await api.products.add(
-        {
-          shop_id: Number(form.shop_id),
-          name: form.name.trim(),
-          price,
-          category: form.category.trim() || null,
-          description: form.description.trim() || null,
-          image_url,
-          stock_status: form.stock_status,
-        },
-        token
-      );
+      const media = existingMedia.map((m) => ({ media_type: m.media_type, url: m.url }));
+      if (extras.length) {
+        setStage('uploading');
+        for (const f of extras) {
+          const { data } = await api.uploads.media(f, token);
+          media.push({ media_type: data.media_type, url: data.url });
+        }
+      }
 
-      toast.success(`"${form.name.trim()}" is now listed`);
+      const views360 = {};
+      if (enable360) {
+        setStage('uploading');
+        for (const a of VIEW_ANGLES) {
+          if (views[a.id]) {
+            const { data } = await api.uploads.image(views[a.id], token);
+            views360[a.id] = data.image_url;
+          } else if (existingViews[a.id]) {
+            views360[a.id] = existingViews[a.id];
+          }
+        }
+      }
+
+      let model_url = existingModel;
+      if (glb) {
+        setStage('uploading');
+        ({ data: { model_url } } = await api.uploads.model(glb, token));
+      }
+
+      setStage('saving');
+      const payload = {
+        shop_id: Number(form.shop_id),
+        name: form.name.trim(),
+        price,
+        category: form.category.trim() || null,
+        description: form.description.trim() || null,
+        image_url,
+        media,
+        view360_enabled: enable360,
+        views: views360,
+        model_url,
+        stock_quantity,
+      };
+      if (editing) await api.products.update(editId, payload, token);
+      else await api.products.add(payload, token);
+
+      toast.success(editing ? `"${form.name.trim()}" updated` : `"${form.name.trim()}" is now listed`);
       navigate('/artisan', { replace: true });
     } catch (err) {
       setError(err.message);
@@ -154,7 +266,7 @@ export default function AddProduct() {
 
   return (
     <div className="flex min-h-0 flex-1 flex-col">
-      <TopBar title="List a piece" subtitle="A photo and a price is enough" />
+      <TopBar title={editing ? 'Edit listing' : 'List a piece'} subtitle={editing ? 'Update details and stock' : 'A photo and a price is enough'} />
 
       <form
         onSubmit={handleSubmit}
@@ -254,8 +366,94 @@ export default function AddProduct() {
           />
         </div>
 
+        <div className="space-y-3 rounded-3xl border border-cream-300 bg-white p-4">
+          <label className="flex cursor-pointer items-start gap-3">
+            <input type="checkbox" checked={enable360} onChange={(e) => setEnable360(e.target.checked)} className="mt-1" />
+            <span>
+              <span className="block text-[14.5px] font-semibold text-ink-800">Enable 360° view</span>
+              <span className="block text-[12.5px] text-ink-500">
+                Customers can drag to rotate the product. Photograph it from each side.
+              </span>
+            </span>
+          </label>
+          {enable360 && (
+            <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
+              {VIEW_ANGLES.map((a) => (
+                <label key={a.id} className="block cursor-pointer text-center">
+                  <span className="relative grid aspect-square place-items-center overflow-hidden rounded-2xl border-2 border-dashed border-cream-300 bg-cream-100 text-[12px] text-ink-400">
+                    {views[a.id] ? (
+                      <img src={URL.createObjectURL(views[a.id])} alt={a.label} className="h-full w-full object-cover" />
+                    ) : existingViews[a.id] ? (
+                      <img src={existingViews[a.id]} alt={a.label} className="h-full w-full object-cover" />
+                    ) : (
+                      '+ Add photo'
+                    )}
+                    <input type="file" accept="image/jpeg,image/png,image/webp" className="hidden"
+                      onChange={(e) => handleView(a.id, e.target.files?.[0])} />
+                  </span>
+                  <span className="mt-1 block text-[12.5px] font-semibold text-ink-700">
+                    {a.label}{a.required ? ' *' : ' (optional)'}
+                  </span>
+                </label>
+              ))}
+            </div>
+          )}
+        </div>
+
+        <Field label="3D model (.glb)" id="glb" hint="Optional — customers can rotate and zoom it. Max 30 MB.">
+          <div className="flex items-center gap-2">
+            <label className="cursor-pointer rounded-full border border-dashed border-cream-300 px-3 py-1.5 text-[12px] font-semibold text-clay-600">
+              {glb ? 'Replace file' : '+ Add .glb file'}
+              <input id="glb" type="file" accept=".glb,model/gltf-binary" className="hidden"
+                onChange={(e) => {
+                  const f = e.target.files?.[0];
+                  if (!f) return;
+                  if (!f.name.toLowerCase().endsWith('.glb')) return toast.error('Please choose a .glb file');
+                  if (f.size > MAX_VIDEO_BYTES) return toast.error('Model must be under 30 MB');
+                  setGlb(f);
+                }} />
+            </label>
+            {existingModel && !glb && (
+              <span className="inline-flex items-center gap-1.5 text-[12px] text-ink-700">
+                <span>Current model attached</span>
+                <button type="button" aria-label="Remove model" onClick={() => setExistingModel(null)}>×</button>
+              </span>
+            )}
+            {glb && (
+              <span className="inline-flex items-center gap-1.5 text-[12px] text-ink-700">
+                <span className="max-w-[12rem] truncate">{glb.name}</span>
+                <button type="button" aria-label="Remove model" onClick={() => setGlb(null)}>×</button>
+              </span>
+            )}
+          </div>
+        </Field>
+
+        <Field label="Preview gallery" id="extras" hint={`Optional — more photos or a short video (MP4/WEBM, up to 30 MB). ${extras.length}/${MAX_MEDIA} added`}>
+          <div className="flex flex-wrap gap-2">
+            {existingMedia.map((m, i) => (
+              <span key={m.url} className="inline-flex items-center gap-1.5 rounded-full bg-cream-200 px-3 py-1.5 text-[12px] font-medium text-ink-700">
+                {m.media_type === 'video' ? '🎬' : '🖼️'} Saved {m.media_type}
+                <button type="button" aria-label="Remove saved file" onClick={() => setExistingMedia((l) => l.filter((_, j) => j !== i))}>×</button>
+              </span>
+            ))}
+            {extras.map((f, i) => (
+              <span key={`${f.name}-${i}`} className="inline-flex items-center gap-1.5 rounded-full bg-cream-200 px-3 py-1.5 text-[12px] font-medium text-ink-700">
+                {f.type.startsWith('video/') ? '🎬' : '🖼️'} <span className="max-w-[9rem] truncate">{f.name}</span>
+                <button type="button" aria-label={`Remove ${f.name}`} onClick={() => setExtras((l) => l.filter((_, j) => j !== i))}>×</button>
+              </span>
+            ))}
+            <button type="button" onClick={() => extraRef.current?.click()}
+              className="rounded-full border border-dashed border-cream-300 px-3 py-1.5 text-[12px] font-semibold text-clay-600">
+              + Add
+            </button>
+          </div>
+          <input ref={extraRef} id="extras" type="file" multiple className="hidden"
+            accept="image/jpeg,image/png,image/webp,image/gif,video/mp4,video/webm"
+            onChange={(e) => handleExtras(e.target.files)} />
+        </Field>
+
         {/* ---------- Details ---------- */}
-        {shops.length > 1 && (
+        {shops.length > 1 && !editing && (
           <Field label="Shop" id="shop_id">
             <select id="shop_id" className="field-input" value={form.shop_id} onChange={set('shop_id')}>
               {shops.map((s) => (
@@ -312,31 +510,16 @@ export default function AddProduct() {
           />
         </Field>
 
-        <Field label="Availability">
-          <div className="grid grid-cols-2 gap-2.5">
-            {[
-              { value: 'in_stock', label: 'In stock' },
-              { value: 'out_of_stock', label: 'Sold out' },
-            ].map((opt) => {
-              const active = form.stock_status === opt.value;
-              return (
-                <button
-                  key={opt.value}
-                  type="button"
-                  onClick={() => setForm((f) => ({ ...f, stock_status: opt.value }))}
-                  aria-pressed={active}
-                  className={`rounded-2xl border py-3 text-[14px] font-semibold transition active:scale-[0.98]
-                    ${
-                      active
-                        ? 'border-clay-400 bg-clay-50 text-clay-700 ring-4 ring-clay-500/10'
-                        : 'border-cream-300 bg-white text-ink-500 hover:border-clay-200'
-                    }`}
-                >
-                  {opt.label}
-                </button>
-              );
-            })}
-          </div>
+        <Field label="Quantity in stock" id="stock_quantity" hint="How many units are available. Set 0 to mark it sold out.">
+          <Input
+            id="stock_quantity"
+            type="number"
+            min="0"
+            step="1"
+            inputMode="numeric"
+            value={form.stock_quantity}
+            onChange={set('stock_quantity')}
+          />
         </Field>
 
         {error && (
@@ -347,7 +530,7 @@ export default function AddProduct() {
         )}
 
           <Button type="submit" size="lg" loading={!!stage} className="w-full">
-          {stage === 'uploading' ? 'Uploading photo…' : stage === 'saving' ? 'Publishing…' : 'Publish listing'}
+          {stage === 'uploading' ? 'Uploading files…' : stage === 'saving' ? 'Saving…' : editing ? 'Save changes' : 'Publish listing'}
           </Button>
         </Container>
       </form>

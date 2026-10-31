@@ -1,6 +1,7 @@
 const crypto = require('crypto');
 const Razorpay = require('razorpay');
 const { pool } = require('../config/db');
+const { reserveStock, releaseStock } = require('../utils/stock');
 const asyncHandler = require('../utils/asyncHandler');
 
 const keyId = process.env.TEST_KEY_ID;
@@ -37,13 +38,23 @@ const checkout = asyncHandler(async (req, res) => {
     return res.status(503).json({ success: false, message: 'Online payments are not configured' });
   }
 
-  const [result] = await pool.query(
-    `INSERT INTO Orders (customer_id, product_id, shop_id, quantity, price_at_purchase, status,
-                         payment_method, payment_status, delivery_name, delivery_phone, delivery_address)
-     VALUES (?, ?, ?, ?, ?, 'Pending', ?, 'Pending', ?, ?, ?)`,
-    [req.user.user_id, product.product_id, product.shop_id, quantity, product.price,
-     payment_method, name.trim(), phone.trim(), address.trim()]
-  );
+  if (!(await reserveStock(product.product_id, quantity))) {
+    return res.status(409).json({ success: false, message: 'Not enough stock available for that quantity' });
+  }
+
+  let result;
+  try {
+    [result] = await pool.query(
+      `INSERT INTO Orders (customer_id, product_id, shop_id, quantity, price_at_purchase, status,
+                           payment_method, payment_status, delivery_name, delivery_phone, delivery_address)
+       VALUES (?, ?, ?, ?, ?, 'Pending', ?, 'Pending', ?, ?, ?)`,
+      [req.user.user_id, product.product_id, product.shop_id, quantity, product.price,
+       payment_method, name.trim(), phone.trim(), address.trim()]
+    );
+  } catch (err) {
+    await releaseStock(product.product_id, quantity);
+    throw err;
+  }
   const order_id = result.insertId;
 
   if (payment_method === 'COD') {
@@ -56,6 +67,7 @@ const checkout = asyncHandler(async (req, res) => {
     rzpOrder = await razorpay.orders.create({ amount, currency: 'INR', receipt: `order_${order_id}` });
   } catch (err) {
     await pool.query('DELETE FROM Orders WHERE order_id = ?', [order_id]);
+    await releaseStock(product.product_id, quantity);
     return res.status(502).json({ success: false, message: 'Could not start the payment. Please try again.' });
   }
   await pool.query('UPDATE Orders SET razorpay_order_id = ? WHERE order_id = ?', [rzpOrder.id, order_id]);
