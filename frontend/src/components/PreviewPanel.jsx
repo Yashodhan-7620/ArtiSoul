@@ -13,6 +13,7 @@ export default function PreviewPanel({ product }) {
   const modes = [
     product.view360_enabled && { id: '360', label: '360° photos' },
     product.model_url && { id: '3d', label: '3D model' },
+    product.model_url && { id: 'room', label: 'View in your room' },
     gallery.length > 0 && { id: 'gallery', label: 'Photos & videos' },
   ].filter(Boolean);
 
@@ -41,6 +42,7 @@ export default function PreviewPanel({ product }) {
 
       {mode === '360' && <Viewer360 views={views} name={product.name} />}
       {mode === '3d' && <ModelViewer src={product.model_url} name={product.name} />}
+      {mode === 'room' && <ModelViewer room src={product.model_url} name={product.name} />}
       {mode === 'gallery' && (
         <MediaGallery
           name={product.name}
