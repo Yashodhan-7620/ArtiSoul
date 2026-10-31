@@ -13,31 +13,17 @@ import ChatWindow from '../components/ChatWindow';
 export default function ProductDetail() {
   const { id } = useParams();
   const navigate = useNavigate();
-  const { user, token } = useAuth();
+  const { user } = useAuth();
   const [product, setProduct] = useState(null);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(true);
 
-  // Checkout state
-  const [buying, setBuying] = useState(false);
-  const [orderPlaced, setOrderPlaced] = useState(false);
-  const [buyError, setBuyError] = useState('');
-
-  const handleBuyNow = async () => {
+  const handleBuyNow = () => {
     if (!user) {
-      navigate('/login', { state: { redirectTo: `/product/${id}` } });
+      navigate('/login', { state: { redirectTo: `/checkout/${id}` } });
       return;
     }
-    setBuying(true);
-    setBuyError('');
-    try {
-      await api.orders.create(product.product_id, token, 1);
-      setOrderPlaced(true);
-    } catch (err) {
-      setBuyError(err.message || 'Could not place order — please try again.');
-    } finally {
-      setBuying(false);
-    }
+    navigate(`/checkout/${id}`);
   };
 
   useEffect(() => {
@@ -81,36 +67,6 @@ export default function ProductDetail() {
 
   const soldOut = product.stock_status === 'out_of_stock';
   const mapsUrl = `https://www.google.com/maps/search/?api=1&query=${product.latitude},${product.longitude}`;
-
-  // ── Order success screen ──────────────────────────────────────────────────
-  if (orderPlaced) {
-    return (
-      <div className="flex min-h-0 flex-1 flex-col">
-        <TopBar title="Order placed" back />
-        <div className="flex flex-1 flex-col items-center justify-center gap-5 px-8 text-center">
-          <div className="grid h-20 w-20 place-items-center rounded-3xl bg-sage-100 text-sage-600 text-5xl">
-            ✅
-          </div>
-          <div>
-            <h1 className="font-display text-[22px] font-semibold text-ink-900">
-              Payment Successful!
-            </h1>
-            <p className="mt-2 text-[14.5px] leading-relaxed text-ink-500">
-              Your order is on its way to the artisan.
-            </p>
-          </div>
-          <div className="flex flex-col gap-2.5 w-full max-w-[16rem]">
-            <Button onClick={() => navigate('/feed')} className="w-full">
-              Back to Feed
-            </Button>
-            <Button variant="secondary" onClick={() => navigate('/account')} className="w-full">
-              View my orders
-            </Button>
-          </div>
-        </div>
-      </div>
-    );
-  }
 
   return (
     <div className="flex min-h-0 flex-1 flex-col">
@@ -184,14 +140,11 @@ export default function ProductDetail() {
               <Button
                 id="buy-now-btn"
                 onClick={handleBuyNow}
-                disabled={buying || soldOut}
+                disabled={soldOut}
                 className="w-full"
               >
-                {buying ? 'Placing order…' : soldOut ? 'Out of Stock' : 'Buy Now'}
+                {soldOut ? 'Out of Stock' : 'Buy Now'}
               </Button>
-              {buyError && (
-                <p className="text-center text-[12.5px] text-clay-600">{buyError}</p>
-              )}
               {!user && (
                 <p className="px-1 text-center text-[12px] text-ink-400">
                   You'll be asked to log in first.

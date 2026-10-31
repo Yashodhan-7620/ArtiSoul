@@ -84,6 +84,10 @@ export const api = {
     // Customer fetches their own purchase history
     mine: (token) => request('/api/orders/mine', { token }),
 
+    checkout: (body, token) => request('/api/orders/checkout', { method: 'POST', body, token }),
+    verifyPayment: (body, token) =>
+      request('/api/orders/verify-payment', { method: 'POST', body, token }),
+
     // Artisan fetches all orders incoming to their shop(s)
     shop: (token) => request('/api/orders/shop', { token }),
 
