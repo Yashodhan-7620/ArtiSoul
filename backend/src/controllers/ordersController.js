@@ -1,10 +1,11 @@
 const { pool } = require('../config/db');
 const asyncHandler = require('../utils/asyncHandler');
+const { reserveStock, releaseStock } = require('../utils/stock');
 
 // POST /api/orders
 // Auth: customer only.
 // Body: { product_id, quantity?, receiver_address, delivery_instructions?, payment_method, upi_utr?, delivery_fee? }
-// Creates a Pending order, snapshots the price, and stores address & payment verification details.
+// Creates a Pending order, reserves stock, snapshots the price, and stores address & payment verification details.
 const createOrder = asyncHandler(async (req, res) => {
   const customer_id = req.user.user_id;
   const {
@@ -57,26 +58,36 @@ const createOrder = asyncHandler(async (req, res) => {
   const totalAmount = itemsTotal + fee;
   const paymentStatus = payment_method === 'UPI' ? 'Verification_Pending' : 'Pending_COD';
 
-  const [result] = await pool.query(
-    `INSERT INTO Orders 
-      (customer_id, product_id, shop_id, quantity, price_at_purchase, status,
-       receiver_address, delivery_instructions, payment_method, upi_utr, payment_status, delivery_fee, total_amount)
-     VALUES (?, ?, ?, ?, ?, 'Pending', ?, ?, ?, ?, ?, ?, ?)`,
-    [
-      customer_id,
-      product.product_id,
-      product.shop_id,
-      qty,
-      product.price,
-      receiver_address.trim(),
-      delivery_instructions ? delivery_instructions.trim() : null,
-      payment_method,
-      payment_method === 'UPI' ? String(upi_utr).trim() : null,
-      paymentStatus,
-      fee,
-      totalAmount,
-    ]
-  );
+  if (!(await reserveStock(product.product_id, qty))) {
+    return res.status(409).json({ success: false, message: 'Not enough stock available' });
+  }
+
+  let result;
+  try {
+    [result] = await pool.query(
+      `INSERT INTO Orders
+        (customer_id, product_id, shop_id, quantity, price_at_purchase, status,
+         receiver_address, delivery_instructions, payment_method, upi_utr, payment_status, delivery_fee, total_amount)
+       VALUES (?, ?, ?, ?, ?, 'Pending', ?, ?, ?, ?, ?, ?, ?)`,
+      [
+        customer_id,
+        product.product_id,
+        product.shop_id,
+        qty,
+        product.price,
+        receiver_address.trim(),
+        delivery_instructions ? delivery_instructions.trim() : null,
+        payment_method,
+        payment_method === 'UPI' ? String(upi_utr).trim() : null,
+        paymentStatus,
+        fee,
+        totalAmount,
+      ]
+    );
+  } catch (err) {
+    await releaseStock(product.product_id, qty);
+    throw err;
+  }
 
   const [[order]] = await pool.query('SELECT * FROM Orders WHERE order_id = ?', [result.insertId]);
 
@@ -132,7 +143,8 @@ const getShopOrders = asyncHandler(async (req, res) => {
 });
 
 // PATCH /api/orders/:id/status
-// Auth: artisan only. Artisan can mark their shop's orders Delivered or Cancelled.
+// Auth: artisan only. Artisan can mark their shop's orders Delivered or Cancelled,
+// and update payment status. Cancelling returns units to stock.
 const updateOrderStatus = asyncHandler(async (req, res) => {
   const { status, payment_status } = req.body;
 
@@ -145,7 +157,8 @@ const updateOrderStatus = asyncHandler(async (req, res) => {
 
   // Verify the order belongs to a shop owned by this artisan
   const [[order]] = await pool.query(
-    `SELECT o.order_id, o.status, o.payment_status FROM Orders o
+    `SELECT o.order_id, o.product_id, o.quantity, o.status AS current_status, o.payment_status
+     FROM Orders o
      JOIN Shops s ON s.shop_id = o.shop_id
      WHERE o.order_id = ? AND s.artisan_id = ?`,
     [req.params.id, req.user.user_id]
@@ -155,7 +168,7 @@ const updateOrderStatus = asyncHandler(async (req, res) => {
     return res.status(404).json({ success: false, message: 'Order not found or not yours' });
   }
 
-  const nextStatus = status || order.status;
+  const nextStatus = status || order.current_status;
   const nextPaymentStatus =
     payment_status || (nextStatus === 'Delivered' ? 'Paid' : order.payment_status);
 
@@ -163,6 +176,13 @@ const updateOrderStatus = asyncHandler(async (req, res) => {
     'UPDATE Orders SET status = ?, payment_status = ? WHERE order_id = ?',
     [nextStatus, nextPaymentStatus, req.params.id]
   );
+
+  // Cancelling returns the units to stock; un-cancelling reserves them again.
+  if (nextStatus === 'Cancelled' && order.current_status !== 'Cancelled') {
+    await releaseStock(order.product_id, order.quantity);
+  } else if (order.current_status === 'Cancelled' && nextStatus !== 'Cancelled') {
+    await reserveStock(order.product_id, order.quantity);
+  }
 
   res.json({
     success: true,

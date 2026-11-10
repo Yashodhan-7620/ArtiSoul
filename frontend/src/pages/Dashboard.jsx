@@ -205,14 +205,14 @@ function Stat({ label, value }) {
   );
 }
 
-function ProductRow({ product }) {
+function ProductRow({ product, onDelete }) {
   const soldOut = product.stock_status === 'out_of_stock';
   return (
-    <Link
-      to={`/product/${product.product_id}`}
-      className="flex items-center gap-3 rounded-2xl border border-cream-300 bg-white p-2.5
-                 transition hover:border-clay-200 active:scale-[0.99]"
+    <div
+      className="flex items-center gap-2 rounded-2xl border border-cream-300 bg-white p-2.5
+                 transition hover:border-clay-200"
     >
+      <Link to={`/product/${product.product_id}`} className="flex min-w-0 flex-1 items-center gap-3">
       <div className="h-14 w-14 shrink-0 overflow-hidden rounded-xl bg-gradient-to-br from-clay-100 to-cream-300">
         {product.image_url ? (
           <img src={product.image_url} alt="" className="h-full w-full object-cover" />
@@ -228,6 +228,7 @@ function ProductRow({ product }) {
         <p className="mt-0.5 text-[12.5px] text-ink-400">
           {formatPrice(product.price)}
           {product.category ? ` · ${product.category}` : ''}
+          {` · ${product.stock_quantity ?? 0} in stock`}
         </p>
       </div>
 
@@ -236,8 +237,23 @@ function ProductRow({ product }) {
           Sold out
         </span>
       )}
-      <Icon name="chevron" className="h-4 w-4 shrink-0 text-ink-400" />
-    </Link>
+      </Link>
+      <div className="flex shrink-0 flex-col gap-1">
+        <Link
+          to={`/artisan/edit/${product.product_id}`}
+          className="rounded-full bg-cream-200 px-3 py-1 text-center text-[12px] font-semibold text-ink-700 hover:bg-cream-300"
+        >
+          Edit
+        </Link>
+        <button
+          type="button"
+          onClick={() => onDelete(product)}
+          className="rounded-full bg-clay-50 px-3 py-1 text-[12px] font-semibold text-clay-700 hover:bg-clay-100"
+        >
+          Delete
+        </button>
+      </div>
+    </div>
   );
 }
 
@@ -252,6 +268,16 @@ export default function Dashboard() {
   const [selectedConversation, setSelectedConversation] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+
+  const handleDelete = async (product) => {
+    if (!window.confirm(`Delete "${product.name}"? This cannot be undone.`)) return;
+    try {
+      await api.products.remove(product.product_id, token);
+      setProducts((list) => list.filter((p) => p.product_id !== product.product_id));
+    } catch (err) {
+      window.alert(err.message);
+    }
+  };
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -489,25 +515,25 @@ export default function Dashboard() {
                   <span className="text-[12.5px] text-ink-400">{products.length} total</span>
                 </div>
 
-                {products.length === 0 ? (
-                  <div className="rounded-3xl border border-dashed border-cream-300 bg-white px-6 py-10 text-center">
-                    <p className="text-[14px] font-semibold text-ink-600">Nothing listed yet</p>
-                    <p className="mx-auto mt-1 max-w-[28ch] text-[13px] leading-relaxed text-ink-400">
-                      Your first photo is what turns a shop pin into a sale.
-                    </p>
-                    <Button className="mt-4" onClick={() => navigate('/artisan/add')}>
-                      <Icon name="plus" className="h-4 w-4" strokeWidth={2.2} />
-                      Add a product
-                    </Button>
-                  </div>
-                ) : (
-                  <div className="grid grid-cols-[repeat(auto-fill,minmax(clamp(240px,100%,340px),1fr))] gap-2.5">
-                    {products.map((p) => (
-                      <ProductRow key={p.product_id} product={p} />
-                    ))}
-                  </div>
-                )}
-              </section>
+              {products.length === 0 ? (
+                <div className="rounded-3xl border border-dashed border-cream-300 bg-white px-6 py-10 text-center">
+                  <p className="text-[14px] font-semibold text-ink-600">Nothing listed yet</p>
+                  <p className="mx-auto mt-1 max-w-[28ch] text-[13px] leading-relaxed text-ink-400">
+                    Your first photo is what turns a shop pin into a sale.
+                  </p>
+                  <Button className="mt-4" onClick={() => navigate('/artisan/add')}>
+                    <Icon name="plus" className="h-4 w-4" strokeWidth={2.2} />
+                    Add a product
+                  </Button>
+                </div>
+              ) : (
+                <div className="grid gap-2.5 grid-cols-[repeat(auto-fill,minmax(clamp(240px,100%,340px),1fr))]">
+                  {products.map((p) => (
+                    <ProductRow key={p.product_id} product={p} onDelete={handleDelete} />
+                  ))}
+                </div>
+              )}
+            </section>
 
               {/* ── Incoming orders ─────────────────────────────────────── */}
               <section>

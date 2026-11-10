@@ -2,7 +2,20 @@
 // Every call returns the parsed `data` field, or throws an Error carrying
 // the backend's own message so screens can render it verbatim.
 
-const BASE = (import.meta.env.VITE_API_URL || 'http://localhost:5000').replace(/\/$/, '');
+const BASE = (import.meta.env.VITE_API_URL ?? '').replace(/\/$/, '');
+
+// Uploaded files are stored with whatever host served the upload (often
+// http://localhost:5000, or an old tunnel address). Serving them from the
+// current origin keeps them loading on phones and behind HTTPS.
+const UPLOAD_URL = /^https?:\/\/[^/]+(\/uploads\/.+)$/;
+function localiseUploads(value) {
+  if (typeof value === 'string') return value.replace(UPLOAD_URL, `${BASE}$1`);
+  if (Array.isArray(value)) return value.map(localiseUploads);
+  if (value && typeof value === 'object') {
+    return Object.fromEntries(Object.entries(value).map(([k, v]) => [k, localiseUploads(v)]));
+  }
+  return value;
+}
 
 export class ApiError extends Error {
   constructor(message, status) {
@@ -41,7 +54,7 @@ async function request(path, { method = 'GET', body, token, form } = {}) {
     throw new ApiError(payload?.message || `Request failed (${res.status})`, res.status);
   }
 
-  return payload;
+  return localiseUploads(payload);
 }
 
 export const api = {
@@ -68,10 +81,22 @@ export const api = {
       return request(`/api/products/nearby?${qs}`);
     },
     byId: (id) => request(`/api/products/${id}`),
+    update: (id, body, token) => request(`/api/products/${id}`, { method: 'PUT', body, token }),
+    remove: (id, token) => request(`/api/products/${id}`, { method: 'DELETE', token }),
     byShop: (shopId) => request(`/api/products/shop/${shopId}`),
   },
 
   uploads: {
+    model: (file, token) => {
+      const form = new FormData();
+      form.append('model', file);
+      return request('/api/uploads/model', { method: 'POST', body: form, token, form: true });
+    },
+    media: (file, token) => {
+      const form = new FormData();
+      form.append('media', file);
+      return request('/api/uploads/media', { method: 'POST', body: form, token, form: true });
+    },
     image: (file, token) => {
       const form = new FormData();
       form.append('image', file);
@@ -92,6 +117,10 @@ export const api = {
 
     // Customer fetches their own purchase history
     mine: (token) => request('/api/orders/mine', { token }),
+
+    checkout: (body, token) => request('/api/orders/checkout', { method: 'POST', body, token }),
+    verifyPayment: (body, token) =>
+      request('/api/orders/verify-payment', { method: 'POST', body, token }),
 
     // Artisan fetches all orders incoming to their shop(s)
     shop: (token) => request('/api/orders/shop', { token }),

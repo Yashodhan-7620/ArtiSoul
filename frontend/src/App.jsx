@@ -62,6 +62,14 @@ function Shell() {
           }
         />
         <Route
+          path="/artisan/edit/:id"
+          element={
+            <ProtectedRoute role="artisan">
+              <AddProduct />
+            </ProtectedRoute>
+          }
+        />
+        <Route
           path="/artisan/add"
           element={
             <ProtectedRoute role="artisan">

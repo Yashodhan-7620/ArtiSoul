@@ -219,19 +219,19 @@ export default function Account() {
             </div>
           )}
 
-          <div className="mt-4 rounded-2xl border border-cream-300 bg-white px-4 py-3.5">
-            <div className="flex items-center gap-2.5">
-              <span
-                className={`h-2 w-2 shrink-0 rounded-full ${
-                  apiUp === null ? 'bg-ink-400' : apiUp ? 'bg-sage-500' : 'bg-clay-500'
-                }`}
-              />
-              <span className="text-[13.5px] font-semibold text-ink-700">
-                {apiUp === null ? 'Checking API…' : apiUp ? 'API connected' : 'API unreachable'}
-              </span>
-            </div>
-            <p className="mt-1.5 break-all pl-[18px] text-[12px] text-ink-400">{API_BASE}</p>
+        <div className="mt-4 rounded-2xl border border-cream-300 bg-white px-4 py-3.5">
+          <div className="flex items-center gap-2.5">
+            <span
+              className={`h-2 w-2 shrink-0 rounded-full ${
+                apiUp === null ? 'bg-ink-400' : apiUp ? 'bg-sage-500' : 'bg-clay-500'
+              }`}
+            />
+            <span className="text-[13.5px] font-semibold text-ink-700">
+              {apiUp === null ? 'Checking API…' : apiUp ? 'API connected' : 'API unreachable'}
+            </span>
           </div>
+          <p className="mt-1.5 break-all pl-[18px] text-[12px] text-ink-400">{API_BASE || window.location.origin}</p>
+        </div>
 
           {/* My Orders — customer purchase history */}
           {!isArtisan && orders.length > 0 && (

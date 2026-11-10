@@ -9,6 +9,7 @@ import { api } from '../lib/api';
 import { formatPrice } from '../lib/format';
 import { useAuth } from '../context/AuthContext';
 import ChatWindow from '../components/ChatWindow';
+import PreviewPanel from '../components/PreviewPanel';
 
 export default function ProductDetail() {
   const { id } = useParams();
@@ -20,11 +21,12 @@ export default function ProductDetail() {
 
   const handleBuyNow = () => {
     const targetProductId = product?.product_id || id;
+    const checkoutPath = `/checkout/${targetProductId}`;
     if (!user) {
-      navigate('/login', { state: { from: `/checkout/${targetProductId}` } });
+      navigate('/login', { state: { redirectTo: checkoutPath, from: checkoutPath } });
       return;
     }
-    navigate(`/checkout/${targetProductId}`);
+    navigate(checkoutPath);
   };
 
   useEffect(() => {
@@ -61,11 +63,7 @@ export default function ProductDetail() {
     return (
       <div className="flex min-h-0 flex-1 flex-col">
         <TopBar title="Product" back />
-        <EmptyState
-          icon="alert"
-          title="Not found"
-          message={error || 'This product no longer exists.'}
-        />
+        <EmptyState icon="alert" title="Not found" message={error || 'This product no longer exists.'} />
       </div>
     );
   }
@@ -82,11 +80,7 @@ export default function ProductDetail() {
         <Container className="md:grid md:grid-cols-2 md:items-start md:gap-10">
           <div className="relative aspect-square w-full overflow-hidden bg-gradient-to-br from-clay-100 to-cream-300 md:sticky md:top-4 md:rounded-3xl">
             {product.image_url ? (
-              <img
-                src={product.image_url}
-                alt={product.name}
-                className="h-full w-full object-cover"
-              />
+              <img src={product.image_url} alt={product.name} className="h-full w-full object-cover" />
             ) : (
               <div className="grid h-full w-full place-items-center text-clay-400/60">
                 <Icon name="box" className="h-14 w-14" strokeWidth={1.2} />
@@ -114,6 +108,9 @@ export default function ProductDetail() {
               <p className="mt-2 font-display text-[24px] font-semibold text-clay-600 md:text-[28px]">
                 {formatPrice(product.price)}
               </p>
+              {!soldOut && product.stock_quantity > 0 && product.stock_quantity <= 5 && (
+                <p className="mt-1 text-[13px] font-semibold text-clay-600">Only {product.stock_quantity} left</p>
+              )}
             </div>
 
             {product.description && (
@@ -123,9 +120,7 @@ export default function ProductDetail() {
             )}
 
             <div className="rounded-3xl border border-cream-300 bg-white p-4 md:p-5">
-              <p className="text-[11px] font-bold uppercase tracking-[0.1em] text-ink-400">
-                Made by
-              </p>
+              <p className="text-[11px] font-bold uppercase tracking-[0.1em] text-ink-400">Made by</p>
               <p className="mt-1.5 font-display text-[18px] font-semibold text-ink-800 md:text-[20px]">
                 {product.shop_name}
               </p>
@@ -146,7 +141,8 @@ export default function ProductDetail() {
               </a>
             </div>
 
-            {/* ── Buy Now -> Navigates to Checkout ─────────────────────── */}
+            {/* ── Preview gallery + Buy Now -> Navigates to Checkout ── */}
+            <PreviewPanel product={product} />
             <div className="space-y-2">
               <Button
                 id="buy-now-btn"
