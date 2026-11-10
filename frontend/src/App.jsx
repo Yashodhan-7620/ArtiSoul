@@ -35,7 +35,14 @@ function Shell() {
             needs no token, and a customer shouldn't have to sign up to look. */}
         <Route path="/feed" element={<Feed />} />
         <Route path="/product/:id" element={<ProductDetail />} />
-        <Route path="/checkout/:id" element={<Checkout />} />
+        <Route
+          path="/checkout/:id"
+          element={
+            <ProtectedRoute>
+              <Checkout />
+            </ProtectedRoute>
+          }
+        />
         <Route path="/account" element={<Account />} />
 
         <Route

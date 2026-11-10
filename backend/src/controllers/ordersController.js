@@ -4,14 +4,39 @@ const { reserveStock, releaseStock } = require('../utils/stock');
 
 // POST /api/orders
 // Auth: customer only.
-// Body: { product_id, quantity? }
-// Creates a Pending order and snapshots the price.
+// Body: { product_id, quantity?, receiver_address, delivery_instructions?, payment_method, upi_utr?, delivery_fee? }
+// Creates a Pending order, reserves stock, snapshots the price, and stores address & payment verification details.
 const createOrder = asyncHandler(async (req, res) => {
   const customer_id = req.user.user_id;
-  const { product_id, quantity = 1 } = req.body;
+  const {
+    product_id,
+    quantity = 1,
+    receiver_address,
+    delivery_instructions = null,
+    payment_method = 'COD',
+    upi_utr = null,
+    delivery_fee = 40,
+  } = req.body;
 
   if (!product_id) {
     return res.status(400).json({ success: false, message: 'product_id is required' });
+  }
+
+  if (!receiver_address || !receiver_address.trim()) {
+    return res.status(400).json({ success: false, message: 'Receiver delivery address is required' });
+  }
+
+  if (!['COD', 'UPI'].includes(payment_method)) {
+    return res.status(400).json({ success: false, message: "payment_method must be 'COD' or 'UPI'" });
+  }
+
+  if (payment_method === 'UPI') {
+    if (!upi_utr || !/^[0-9]{12}$/.test(String(upi_utr).trim())) {
+      return res.status(400).json({
+        success: false,
+        message: 'A valid 12-digit UPI UTR / Reference number is required to verify UPI payment',
+      });
+    }
   }
 
   const [[product]] = await pool.query(
@@ -27,25 +52,53 @@ const createOrder = asyncHandler(async (req, res) => {
     return res.status(409).json({ success: false, message: 'Product is out of stock' });
   }
 
-  if (!(await reserveStock(product.product_id, quantity))) {
+  const qty = Number(quantity) || 1;
+  const fee = Number(delivery_fee) || 40;
+  const itemsTotal = Number(product.price) * qty;
+  const totalAmount = itemsTotal + fee;
+  const paymentStatus = payment_method === 'UPI' ? 'Verification_Pending' : 'Pending_COD';
+
+  if (!(await reserveStock(product.product_id, qty))) {
     return res.status(409).json({ success: false, message: 'Not enough stock available' });
   }
 
   let result;
   try {
     [result] = await pool.query(
-      `INSERT INTO Orders (customer_id, product_id, shop_id, quantity, price_at_purchase, status)
-       VALUES (?, ?, ?, ?, ?, 'Pending')`,
-      [customer_id, product.product_id, product.shop_id, quantity, product.price]
+      `INSERT INTO Orders
+        (customer_id, product_id, shop_id, quantity, price_at_purchase, status,
+         receiver_address, delivery_instructions, payment_method, upi_utr, payment_status, delivery_fee, total_amount)
+       VALUES (?, ?, ?, ?, ?, 'Pending', ?, ?, ?, ?, ?, ?, ?)`,
+      [
+        customer_id,
+        product.product_id,
+        product.shop_id,
+        qty,
+        product.price,
+        receiver_address.trim(),
+        delivery_instructions ? delivery_instructions.trim() : null,
+        payment_method,
+        payment_method === 'UPI' ? String(upi_utr).trim() : null,
+        paymentStatus,
+        fee,
+        totalAmount,
+      ]
     );
   } catch (err) {
-    await releaseStock(product.product_id, quantity);
+    await releaseStock(product.product_id, qty);
     throw err;
   }
 
   const [[order]] = await pool.query('SELECT * FROM Orders WHERE order_id = ?', [result.insertId]);
 
-  res.status(201).json({ success: true, message: 'Order placed successfully', data: order });
+  res.status(201).json({
+    success: true,
+    message:
+      payment_method === 'UPI'
+        ? 'UPI payment submitted for verification and order placed!'
+        : 'Order placed successfully!',
+    data: order,
+  });
 });
 
 // GET /api/orders/mine
@@ -90,17 +143,22 @@ const getShopOrders = asyncHandler(async (req, res) => {
 });
 
 // PATCH /api/orders/:id/status
-// Auth: artisan only. Artisan can mark their shop's orders Delivered or Cancelled.
+// Auth: artisan only. Artisan can mark their shop's orders Delivered or Cancelled,
+// and update payment status. Cancelling returns units to stock.
 const updateOrderStatus = asyncHandler(async (req, res) => {
-  const { status } = req.body;
+  const { status, payment_status } = req.body;
 
-  if (!['Pending', 'Delivered', 'Cancelled'].includes(status)) {
-    return res.status(400).json({ success: false, message: "status must be 'Pending', 'Delivered' or 'Cancelled'" });
+  if (status && !['Pending', 'Delivered', 'Cancelled'].includes(status)) {
+    return res.status(400).json({
+      success: false,
+      message: "status must be 'Pending', 'Delivered' or 'Cancelled'",
+    });
   }
 
   // Verify the order belongs to a shop owned by this artisan
   const [[order]] = await pool.query(
-    `SELECT o.order_id, o.product_id, o.quantity, o.status AS current_status FROM Orders o
+    `SELECT o.order_id, o.product_id, o.quantity, o.status AS current_status, o.payment_status
+     FROM Orders o
      JOIN Shops s ON s.shop_id = o.shop_id
      WHERE o.order_id = ? AND s.artisan_id = ?`,
     [req.params.id, req.user.user_id]
@@ -110,14 +168,26 @@ const updateOrderStatus = asyncHandler(async (req, res) => {
     return res.status(404).json({ success: false, message: 'Order not found or not yours' });
   }
 
-  await pool.query('UPDATE Orders SET status = ? WHERE order_id = ?', [status, req.params.id]);
-  // Cancelling returns the units to stock.
-  if (status === 'Cancelled' && order.current_status !== 'Cancelled') {
+  const nextStatus = status || order.current_status;
+  const nextPaymentStatus =
+    payment_status || (nextStatus === 'Delivered' ? 'Paid' : order.payment_status);
+
+  await pool.query(
+    'UPDATE Orders SET status = ?, payment_status = ? WHERE order_id = ?',
+    [nextStatus, nextPaymentStatus, req.params.id]
+  );
+
+  // Cancelling returns the units to stock; un-cancelling reserves them again.
+  if (nextStatus === 'Cancelled' && order.current_status !== 'Cancelled') {
     await releaseStock(order.product_id, order.quantity);
-  } else if (order.current_status === 'Cancelled' && status !== 'Cancelled') {
+  } else if (order.current_status === 'Cancelled' && nextStatus !== 'Cancelled') {
     await reserveStock(order.product_id, order.quantity);
   }
-  res.json({ success: true, data: { order_id: order.order_id, status } });
+
+  res.json({
+    success: true,
+    data: { order_id: order.order_id, status: nextStatus, payment_status: nextPaymentStatus },
+  });
 });
 
 module.exports = { createOrder, getMyOrders, getShopOrders, updateOrderStatus };

@@ -37,4 +37,48 @@ const getMyShops = asyncHandler(async (req, res) => {
   res.json({ success: true, data: rows });
 });
 
-module.exports = { createShop, getMyShops };
+// PUT /api/shops/my-qr
+// Auth: artisan only. Body: { upi_qr_url }
+const updateShopQr = asyncHandler(async (req, res) => {
+  const artisan_id = req.user.user_id;
+  const { upi_qr_url } = req.body;
+
+  if (!upi_qr_url) {
+    return res.status(400).json({ success: false, message: 'QR code image URL is required' });
+  }
+
+  const [result] = await pool.query(
+    'UPDATE Shops SET upi_qr_url = ? WHERE artisan_id = ?',
+    [upi_qr_url, artisan_id]
+  );
+
+  if (result.affectedRows === 0) {
+    return res.status(404).json({
+      success: false,
+      message: 'Please create your shop first before uploading a payment QR code.',
+    });
+  }
+
+  res.json({
+    success: true,
+    message: 'UPI QR code updated successfully',
+    data: { upi_qr_url },
+  });
+});
+
+// GET /api/shops/qr/:shopId
+// Public/Customer route to fetch the shop's UPI QR code at checkout
+const getShopQr = asyncHandler(async (req, res) => {
+  const [[shop]] = await pool.query(
+    'SELECT shop_id, shop_name, upi_qr_url FROM Shops WHERE shop_id = ?',
+    [req.params.shopId]
+  );
+
+  if (!shop) {
+    return res.status(404).json({ success: false, message: 'Shop not found' });
+  }
+
+  res.json({ success: true, data: shop });
+});
+
+module.exports = { createShop, getMyShops, updateShopQr, getShopQr };

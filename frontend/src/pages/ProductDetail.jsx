@@ -20,11 +20,13 @@ export default function ProductDetail() {
   const [loading, setLoading] = useState(true);
 
   const handleBuyNow = () => {
+    const targetProductId = product?.product_id || id;
+    const checkoutPath = `/checkout/${targetProductId}`;
     if (!user) {
-      navigate('/login', { state: { redirectTo: `/checkout/${id}` } });
+      navigate('/login', { state: { redirectTo: checkoutPath, from: checkoutPath } });
       return;
     }
-    navigate(`/checkout/${id}`);
+    navigate(checkoutPath);
   };
 
   useEffect(() => {
@@ -139,8 +141,7 @@ export default function ProductDetail() {
               </a>
             </div>
 
-            {/* ── Buy Now ──────────────────────────────────────────────── */}
-            {/* ── Preview gallery + Buy Now ── */}
+            {/* ── Preview gallery + Buy Now -> Navigates to Checkout ── */}
             <PreviewPanel product={product} />
             <div className="space-y-2">
               <Button
