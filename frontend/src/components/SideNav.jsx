@@ -8,7 +8,10 @@ import { useAuth } from '../context/AuthContext';
 // would squeeze the content column more than it helps, so BottomNav takes over.
 export default function SideNav() {
   const { user, isArtisan } = useAuth();
-  const items = NAV_ITEMS.filter((i) => !i.artisanOnly || isArtisan);
+  const isCustomer = Boolean(user) && !isArtisan;
+  const items = NAV_ITEMS.filter(
+    (i) => (!i.artisanOnly || isArtisan) && (!i.customerOnly || isCustomer)
+  );
 
   return (
     <aside className="hidden w-[264px] shrink-0 flex-col border-r border-cream-300 bg-cream-50/60 px-4 py-6 lg:flex">

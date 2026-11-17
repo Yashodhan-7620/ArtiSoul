@@ -34,3 +34,15 @@ export const CATEGORIES = [
   'Metalwork',
   'Home Decor',
 ];
+
+// "17 November 2026": day, month and year spelled out on every purchase.
+const fullDate = new Intl.DateTimeFormat('en-IN', { day: 'numeric', month: 'long', year: 'numeric' });
+export const formatDate = (value) => fullDate.format(new Date(value));
+
+// Month buckets for filtering, e.g. key "2026-11", label "November 2026".
+const monthLabel = new Intl.DateTimeFormat('en-IN', { month: 'long', year: 'numeric' });
+export function monthKey(value) {
+  const d = new Date(value);
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+}
+export const formatMonth = (value) => monthLabel.format(new Date(value));

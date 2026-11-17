@@ -112,6 +112,18 @@ export default function Account() {
           </div>
         )}
 
+        {!isArtisan && (
+          <Link
+            to="/purchases"
+            className="mt-4 flex items-center gap-3 rounded-2xl border border-cream-300 bg-white px-4 py-3.5
+                       transition hover:border-clay-200 active:scale-[0.99]"
+          >
+            <Icon name="receipt" className="h-5 w-5 text-clay-500" />
+            <span className="flex-1 text-[14.5px] font-semibold text-ink-700">Purchase history & reviews</span>
+            <Icon name="chevron" className="h-4 w-4 text-ink-400" />
+          </Link>
+        )}
+
         <div className="mt-4 rounded-2xl border border-cream-300 bg-white px-4 py-3.5">
           <div className="flex items-center gap-2.5">
             <span

@@ -4,5 +4,6 @@ export const NAV_ITEMS = [
   { to: '/feed', icon: 'compass', label: 'Discover', desktopLabel: 'Discover' },
   { to: '/artisan', icon: 'store', label: 'My Shop', desktopLabel: 'My shop', artisanOnly: true },
   { to: '/artisan/add', icon: 'plus', label: 'Sell', desktopLabel: 'List a piece', artisanOnly: true },
+  { to: '/purchases', icon: 'receipt', label: 'Orders', desktopLabel: 'Purchase history', customerOnly: true },
   { to: '/account', icon: 'user', label: 'Account', desktopLabel: 'Account' },
 ];

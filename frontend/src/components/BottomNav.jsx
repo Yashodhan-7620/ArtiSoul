@@ -5,8 +5,11 @@ import { useAuth } from '../context/AuthContext';
 
 // Phone and tablet navigation. Hidden from lg up, where SideNav takes over.
 export default function BottomNav() {
-  const { isArtisan } = useAuth();
-  const items = NAV_ITEMS.filter((i) => !i.artisanOnly || isArtisan);
+  const { user, isArtisan } = useAuth();
+  const isCustomer = Boolean(user) && !isArtisan;
+  const items = NAV_ITEMS.filter(
+    (i) => (!i.artisanOnly || isArtisan) && (!i.customerOnly || isCustomer)
+  );
 
   return (
     <nav className="z-20 shrink-0 border-t border-cream-300/70 bg-cream-100/95 px-2 pb-[env(safe-area-inset-bottom)] backdrop-blur-md lg:hidden">

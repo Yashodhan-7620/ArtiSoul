@@ -13,6 +13,7 @@ import Dashboard from './pages/Dashboard';
 import Feed from './pages/Feed';
 import Login from './pages/Login';
 import ProductDetail from './pages/ProductDetail';
+import Purchases from './pages/Purchases';
 import Signup from './pages/Signup';
 import Welcome from './pages/Welcome';
 
@@ -37,6 +38,15 @@ function Shell() {
         <Route path="/product/:id" element={<ProductDetail />} />
         <Route path="/checkout/:id" element={<Checkout />} />
         <Route path="/account" element={<Account />} />
+
+        <Route
+          path="/purchases"
+          element={
+            <ProtectedRoute role="customer">
+              <Purchases />
+            </ProtectedRoute>
+          }
+        />
 
         <Route
           path="/artisan"

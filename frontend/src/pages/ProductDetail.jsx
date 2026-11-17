@@ -6,7 +6,8 @@ import TopBar from '../components/TopBar';
 import Button from '../components/Button';
 import { Container } from '../components/AppShell';
 import { api } from '../lib/api';
-import { formatPrice } from '../lib/format';
+import { formatDate, formatPrice } from '../lib/format';
+import Stars from '../components/Stars';
 import { useAuth } from '../context/AuthContext';
 import ChatWindow from '../components/ChatWindow';
 import PreviewPanel from '../components/PreviewPanel';
@@ -106,6 +107,15 @@ export default function ProductDetail() {
               <p className="mt-2 font-display text-[24px] font-semibold text-clay-600 md:text-[28px]">
                 {formatPrice(product.price)}
               </p>
+              {product.review_count > 0 && (
+                <a href="#reviews" className="mt-1.5 inline-flex items-center gap-1.5">
+                  <Stars value={product.avg_rating} size="h-4 w-4" />
+                  <span className="text-[13px] font-semibold text-ink-700">{Number(product.avg_rating).toFixed(1)}</span>
+                  <span className="text-[13px] text-ink-400 hover:underline">
+                    ({product.review_count} {product.review_count === 1 ? 'review' : 'reviews'})
+                  </span>
+                </a>
+              )}
               {!soldOut && product.stock_quantity > 0 && product.stock_quantity <= 5 && (
                 <p className="mt-1 text-[13px] font-semibold text-clay-600">Only {product.stock_quantity} left</p>
               )}
@@ -157,6 +167,33 @@ export default function ProductDetail() {
                 </p>
               )}
             </div>
+
+            {/* ── Buyer reviews ── */}
+            <section id="reviews" className="scroll-mt-24">
+              <h3 className="font-display text-[18px] font-semibold text-ink-800">
+                Reviews{product.review_count > 0 && ` (${product.review_count})`}
+              </h3>
+              {!product.reviews?.length ? (
+                <p className="mt-1.5 text-[13.5px] text-ink-400">
+                  No reviews yet. Buyers can review this piece after it's delivered.
+                </p>
+              ) : (
+                <div className="mt-3 space-y-2.5">
+                  {product.reviews.map((r) => (
+                    <article key={r.review_id} className="rounded-2xl border border-cream-300 bg-white px-4 py-3">
+                      <div className="flex items-center justify-between gap-2">
+                        <Stars value={r.rating} size="h-4 w-4" />
+                        <span className="text-[11.5px] text-ink-400">{formatDate(r.created_at)}</span>
+                      </div>
+                      {r.comment && (
+                        <p className="mt-1.5 text-[13.5px] leading-relaxed text-ink-600">{r.comment}</p>
+                      )}
+                      <p className="mt-1 text-[12px] font-medium text-ink-400">{r.reviewer} · Verified buyer</p>
+                    </article>
+                  ))}
+                </div>
+              )}
+            </section>
           </div>
         </Container>
       </div>

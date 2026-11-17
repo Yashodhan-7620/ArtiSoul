@@ -53,11 +53,13 @@ const createOrder = asyncHandler(async (req, res) => {
 const getMyOrders = asyncHandler(async (req, res) => {
   const [orders] = await pool.query(
     `SELECT o.*, p.name AS product_name, p.image_url, s.shop_name,
-            COALESCE(ls.status, 'none') AS stream_status
+            COALESCE(ls.status, 'none') AS stream_status,
+            r.rating AS review_rating, r.comment AS review_comment, r.created_at AS reviewed_at
      FROM Orders o
      JOIN Products p ON p.product_id = o.product_id
      JOIN Shops    s ON s.shop_id    = o.shop_id
      LEFT JOIN LiveStreams ls ON ls.order_id = o.order_id
+     LEFT JOIN Reviews     r  ON r.order_id  = o.order_id
      WHERE o.customer_id = ?
      ORDER BY o.created_at DESC`,
     [req.user.user_id]

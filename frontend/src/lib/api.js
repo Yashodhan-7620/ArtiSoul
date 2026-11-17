@@ -113,6 +113,10 @@ export const api = {
     verifyPayment: (body, token) =>
       request('/api/orders/verify-payment', { method: 'POST', body, token }),
 
+    // Customer reviews a delivered order (once; reviews cannot be edited)
+    review: (orderId, body, token) =>
+      request(`/api/orders/${orderId}/review`, { method: 'POST', body, token }),
+
     // Artisan fetches all orders incoming to their shop(s)
     shop: (token) => request('/api/orders/shop', { token }),
 

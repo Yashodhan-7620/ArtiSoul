@@ -129,6 +129,8 @@ const getNearbyProducts = asyncHandler(async (req, res) => {
         p.product_id, p.name, p.price, p.category, p.image_url,
         p.description, p.stock_status,
         s.shop_id, s.shop_name, s.address, s.latitude, s.longitude,
+        COALESCE(rv.avg_rating, 0) AS avg_rating, COALESCE(rv.review_count, 0) AS review_count,
+        lr.comment AS latest_review, lr.reviewer AS latest_reviewer, lr.rating AS latest_review_rating,
         (
           6371 * ACOS(
             COS(RADIANS(?)) * COS(RADIANS(s.latitude)) *
@@ -138,6 +140,19 @@ const getNearbyProducts = asyncHandler(async (req, res) => {
         ) AS distance_km
     FROM Products p
     JOIN Shops s ON p.shop_id = s.shop_id
+    -- Buyer reviews: average + count, and the newest written review for the card
+    LEFT JOIN (
+      SELECT product_id, ROUND(AVG(rating), 1) AS avg_rating, COUNT(*) AS review_count
+      FROM Reviews GROUP BY product_id
+    ) rv ON rv.product_id = p.product_id
+    LEFT JOIN (
+      SELECT r.product_id, r.rating, r.comment, SUBSTRING_INDEX(u.name, ' ', 1) AS reviewer
+      FROM Reviews r JOIN Users u ON u.user_id = r.customer_id
+      WHERE r.comment IS NOT NULL
+        AND r.review_id = (SELECT r2.review_id FROM Reviews r2
+                           WHERE r2.product_id = r.product_id AND r2.comment IS NOT NULL
+                           ORDER BY r2.created_at DESC, r2.review_id DESC LIMIT 1)
+    ) lr ON lr.product_id = p.product_id
     WHERE p.stock_status = 'in_stock'
     ${categoryFilter}
     HAVING distance_km <= ?
@@ -179,7 +194,20 @@ const getProductById = asyncHandler(async (req, res) => {
     v.forEach((r) => { views360[r.angle] = r.url; });
   }
 
-  res.json({ success: true, data: { ...rows[0], media, views360 } });
+  // Buyer reviews are public; only the reviewer's first name is shown.
+  const [reviews] = await pool.query(
+    `SELECT r.review_id, r.rating, r.comment, r.created_at, SUBSTRING_INDEX(u.name, ' ', 1) AS reviewer
+     FROM Reviews r JOIN Users u ON u.user_id = r.customer_id
+     WHERE r.product_id = ?
+     ORDER BY r.created_at DESC, r.review_id DESC`,
+    [id]
+  );
+  const review_count = reviews.length;
+  const avg_rating = review_count
+    ? Math.round((reviews.reduce((sum, r) => sum + r.rating, 0) / review_count) * 10) / 10
+    : 0;
+
+  res.json({ success: true, data: { ...rows[0], media, views360, reviews, review_count, avg_rating } });
 });
 
 // GET /api/products/shop/:shop_id (extra convenience route — a shop's storefront listing)

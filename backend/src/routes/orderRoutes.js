@@ -2,6 +2,7 @@ const express = require('express');
 const router = express.Router();
 const { verifyToken, requireRole } = require('../middleware/auth');
 const { checkout, verifyPayment } = require('../controllers/checkoutController');
+const { createReview } = require('../controllers/reviewController');
 const { createOrder, getMyOrders, getShopOrders, updateOrderStatus } = require('../controllers/ordersController');
 
 // POST   /api/orders            — customer places an order
@@ -12,6 +13,9 @@ router.post('/verify-payment', verifyToken, requireRole('customer'), verifyPayme
 
 // GET    /api/orders/mine       — customer sees their purchase history
 router.get('/mine', verifyToken, requireRole('customer'), getMyOrders);
+
+// POST   /api/orders/:id/review — customer reviews a delivered order (once, final)
+router.post('/:id/review', verifyToken, requireRole('customer'), createReview);
 
 // GET    /api/orders/shop       — artisan sees incoming orders on their shop
 router.get('/shop', verifyToken, requireRole('artisan'), getShopOrders);
