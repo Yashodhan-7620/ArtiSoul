@@ -241,4 +241,4 @@ const deleteProduct = asyncHandler(async (req, res) => {
   res.json({ success: true, message: 'Product deleted' });
 });
 
-module.exports = { addProduct, updateProduct, deleteProduct, addProduct, getNearbyProducts, getProductById, getProductsByShop };
+module.exports = { addProduct, updateProduct, deleteProduct, getNearbyProducts, getProductById, getProductsByShop };

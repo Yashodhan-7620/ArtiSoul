@@ -1,7 +1,9 @@
-const path = require('path');
 const express = require('express');
 const cors = require('cors');
 const errorHandler = require('./middleware/errorHandler');
+const asyncHandler = require('./utils/asyncHandler');
+const { isWorker } = require('./config/runtime');
+const { UPLOAD_DIR, serveFromR2 } = require('./utils/storage');
 
 const authRoutes = require('./routes/authRoutes');
 const productRoutes = require('./routes/productRoutes');
@@ -9,6 +11,7 @@ const shopRoutes = require('./routes/shopRoutes');
 const uploadRoutes = require('./routes/uploadRoutes');
 const orderRoutes = require('./routes/orderRoutes');
 const chatRoutes = require('./routes/chatRoutes');
+const streamRoutes = require('./routes/streamRoutes');
 
 const app = express();
 
@@ -34,8 +37,12 @@ app.use(
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
-// Uploaded product photos
-app.use('/uploads', express.static(path.join(__dirname, '..', 'uploads')));
+// Uploaded product photos — from disk locally, from R2 on Cloudflare
+if (isWorker) {
+  app.get('/uploads/:name', asyncHandler(serveFromR2));
+} else {
+  app.use('/uploads', express.static(UPLOAD_DIR));
+}
 
 app.get('/', (req, res) => {
   res.json({
@@ -55,6 +62,7 @@ app.use('/api/shops', shopRoutes);
 app.use('/api/uploads', uploadRoutes);
 app.use('/api/orders', orderRoutes);
 app.use('/api/chat', chatRoutes);
+app.use('/api/streams', streamRoutes);
 
 // 404 for anything unmatched
 app.use((req, res) => {

@@ -52,10 +52,12 @@ const createOrder = asyncHandler(async (req, res) => {
 // Auth: customer only. Returns the calling customer's purchase history.
 const getMyOrders = asyncHandler(async (req, res) => {
   const [orders] = await pool.query(
-    `SELECT o.*, p.name AS product_name, p.image_url, s.shop_name
+    `SELECT o.*, p.name AS product_name, p.image_url, s.shop_name,
+            COALESCE(ls.status, 'none') AS stream_status
      FROM Orders o
      JOIN Products p ON p.product_id = o.product_id
      JOIN Shops    s ON s.shop_id    = o.shop_id
+     LEFT JOIN LiveStreams ls ON ls.order_id = o.order_id
      WHERE o.customer_id = ?
      ORDER BY o.created_at DESC`,
     [req.user.user_id]
@@ -78,10 +80,12 @@ const getShopOrders = asyncHandler(async (req, res) => {
   const shopIds = shops.map((s) => s.shop_id);
 
   const [orders] = await pool.query(
-    `SELECT o.*, p.name AS product_name, u.name AS customer_name, u.phone AS customer_phone
+    `SELECT o.*, p.name AS product_name, u.name AS customer_name, u.phone AS customer_phone,
+            COALESCE(ls.status, 'none') AS stream_status
      FROM Orders o
      JOIN Products p ON p.product_id = o.product_id
      JOIN Users    u ON u.user_id    = o.customer_id
+     LEFT JOIN LiveStreams ls ON ls.order_id = o.order_id
      WHERE o.shop_id IN (?)
      ORDER BY o.created_at DESC`,
     [shopIds]
@@ -94,8 +98,8 @@ const getShopOrders = asyncHandler(async (req, res) => {
 const updateOrderStatus = asyncHandler(async (req, res) => {
   const { status } = req.body;
 
-  if (!['Pending', 'Delivered', 'Cancelled'].includes(status)) {
-    return res.status(400).json({ success: false, message: "status must be 'Pending', 'Delivered' or 'Cancelled'" });
+  if (!['Pending', 'Accepted', 'Delivered', 'Cancelled'].includes(status)) {
+    return res.status(400).json({ success: false, message: "status must be 'Pending', 'Accepted', 'Delivered' or 'Cancelled'" });
   }
 
   // Verify the order belongs to a shop owned by this artisan
@@ -110,7 +114,18 @@ const updateOrderStatus = asyncHandler(async (req, res) => {
     return res.status(404).json({ success: false, message: 'Order not found or not yours' });
   }
 
+  if (status === 'Accepted' && order.current_status !== 'Pending') {
+    return res.status(409).json({ success: false, message: 'Only pending orders can be accepted' });
+  }
+
   await pool.query('UPDATE Orders SET status = ? WHERE order_id = ?', [status, req.params.id]);
+  // A stream only makes sense while the order is being worked on.
+  if (status !== 'Accepted') {
+    await pool.query(
+      "UPDATE LiveStreams SET status = 'ended', offer = NULL, answer = NULL WHERE order_id = ?",
+      [order.order_id]
+    );
+  }
   // Cancelling returns the units to stock.
   if (status === 'Cancelled' && order.current_status !== 'Cancelled') {
     await releaseStock(order.product_id, order.quantity);

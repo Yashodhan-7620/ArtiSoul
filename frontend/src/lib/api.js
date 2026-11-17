@@ -116,9 +116,22 @@ export const api = {
     // Artisan fetches all orders incoming to their shop(s)
     shop: (token) => request('/api/orders/shop', { token }),
 
-    // Artisan marks an order Delivered / Cancelled
+    // Artisan accepts an order or marks it Delivered / Cancelled
     updateStatus: (orderId, status, token) =>
       request(`/api/orders/${orderId}/status`, { method: 'PATCH', body: { status }, token }),
+  },
+
+  // Private per-order livestream signalling (see components/LiveBroadcast.jsx)
+  streams: {
+    state: (orderId, token) => request(`/api/streams/${orderId}`, { token }),
+    start: (orderId, offer, token) =>
+      request(`/api/streams/${orderId}/start`, { method: 'POST', body: { offer }, token }),
+    offer: (orderId, offer, version, token) =>
+      request(`/api/streams/${orderId}/offer`, { method: 'PUT', body: { offer, version }, token }),
+    answer: (orderId, answer, version, token) =>
+      request(`/api/streams/${orderId}/answer`, { method: 'POST', body: { answer, version }, token }),
+    rejoin: (orderId, token) => request(`/api/streams/${orderId}/rejoin`, { method: 'POST', token }),
+    end: (orderId, token) => request(`/api/streams/${orderId}/end`, { method: 'POST', token }),
   },
 
   chat: {

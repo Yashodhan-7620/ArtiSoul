@@ -16,7 +16,7 @@ router.get('/mine', verifyToken, requireRole('customer'), getMyOrders);
 // GET    /api/orders/shop       — artisan sees incoming orders on their shop
 router.get('/shop', verifyToken, requireRole('artisan'), getShopOrders);
 
-// PATCH  /api/orders/:id/status — artisan marks an order Delivered / Cancelled
+// PATCH  /api/orders/:id/status — artisan accepts an order or marks it Delivered / Cancelled
 router.patch('/:id/status', verifyToken, requireRole('artisan'), updateOrderStatus);
 
 module.exports = router;

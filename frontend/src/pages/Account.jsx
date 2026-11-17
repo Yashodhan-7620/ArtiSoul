@@ -3,6 +3,7 @@ import { Link, useNavigate } from 'react-router-dom';
 import Button from '../components/Button';
 import Icon from '../components/Icon';
 import TopBar from '../components/TopBar';
+import LiveViewer from '../components/LiveViewer';
 import { api, API_BASE } from '../lib/api';
 import { initials, formatPrice } from '../lib/format';
 import { Container } from '../components/AppShell';
@@ -13,6 +14,7 @@ export default function Account() {
   const navigate = useNavigate();
   const [apiUp, setApiUp] = useState(null);
   const [orders, setOrders] = useState([]);
+  const [watching, setWatching] = useState(null);
 
   // A visible backend status light saves a lot of "why is nothing loading?"
   useEffect(() => {
@@ -22,12 +24,18 @@ export default function Account() {
       .catch(() => setApiUp(false));
   }, []);
 
-  // Customer purchase history — only fetch if logged in and a customer
+  // Customer purchase history — only fetch if logged in and a customer.
+  // Re-checked every 15s so a "Watch live" button appears when the artisan
+  // starts streaming the order.
   useEffect(() => {
-    if (!user || isArtisan) return;
-    api.orders.mine(token)
-      .then(({ data }) => setOrders(data))
-      .catch(() => {});
+    if (!user || isArtisan) return undefined;
+    const load = () =>
+      api.orders.mine(token)
+        .then(({ data }) => setOrders(data))
+        .catch(() => {});
+    load();
+    const timer = setInterval(load, 15000);
+    return () => clearInterval(timer);
   }, [user, isArtisan, token]);
 
   if (!user) {
@@ -128,6 +136,7 @@ export default function Account() {
               {orders.map((o) => {
                 const pillStyle = {
                   Pending:   'bg-amber-100 text-amber-700',
+                  Accepted:  'bg-sky-100 text-sky-700',
                   Delivered: 'bg-sage-100 text-sage-700',
                   Cancelled: 'bg-clay-50 text-clay-600',
                 }[o.status] ?? 'bg-cream-200 text-ink-500';
@@ -145,15 +154,28 @@ export default function Account() {
                         {o.shop_name} · {formatPrice(o.price_at_purchase)}
                       </p>
                     </div>
-                    <span className={`shrink-0 rounded-full px-2.5 py-1 text-[11px] font-semibold ${pillStyle}`}>
-                      {o.status}
-                    </span>
+                    <div className="flex shrink-0 flex-col items-end gap-1.5">
+                      <span className={`rounded-full px-2.5 py-1 text-[11px] font-semibold ${pillStyle}`}>
+                        {o.status}
+                      </span>
+                      {o.status === 'Accepted' && o.stream_status === 'live' && (
+                        <button
+                          onClick={() => setWatching(o)}
+                          className="inline-flex items-center gap-1.5 rounded-full bg-red-600 px-3 py-1 text-[12px] font-semibold text-white hover:bg-red-700"
+                        >
+                          <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-white" />
+                          Watch live
+                        </button>
+                      )}
+                    </div>
                   </div>
                 );
               })}
             </div>
           </div>
         )}
+
+        {watching && <LiveViewer order={watching} onClose={() => setWatching(null)} />}
 
         <Button
           variant="secondary"

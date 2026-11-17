@@ -24,6 +24,8 @@ export default function CreateShop() {
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
   const [locating, setLocating] = useState(false);
+  // Shop details are permanent once created, so the owner must acknowledge it.
+  const [acknowledged, setAcknowledged] = useState(false);
 
   const set = (key) => (e) => setForm((f) => ({ ...f, [key]: e.target.value }));
 
@@ -63,6 +65,16 @@ export default function CreateShop() {
     if (!form.shop_name.trim()) return setError('Your shop needs a name');
     if (!Number.isFinite(lat) || Math.abs(lat) > 90) return setError('Latitude must be between -90 and 90');
     if (!Number.isFinite(lng) || Math.abs(lng) > 180) return setError('Longitude must be between -180 and 180');
+    if (!acknowledged) return setError('Please confirm that the shop details cannot be changed later');
+
+    const confirmed = window.confirm(
+      'Please check your shop details. They CANNOT be changed after the shop is created.\n\n' +
+        `Shop name: ${form.shop_name.trim()}\n` +
+        `Location: ${lat}, ${lng}\n` +
+        `Address: ${form.address.trim() || '(none)'}\n\n` +
+        'Create the shop with these details?'
+    );
+    if (!confirmed) return;
 
     setBusy(true);
     try {
@@ -148,6 +160,23 @@ export default function CreateShop() {
           />
         </Field>
 
+        <label
+          htmlFor="acknowledge"
+          className="flex cursor-pointer items-start gap-3 rounded-2xl border border-saffron-400 bg-saffron-100 px-4 py-3"
+        >
+          <input
+            id="acknowledge"
+            type="checkbox"
+            checked={acknowledged}
+            onChange={(e) => setAcknowledged(e.target.checked)}
+            className="mt-0.5 h-4 w-4 shrink-0 accent-clay-500"
+          />
+          <span className="text-[13px] leading-relaxed text-ink-700">
+            <span className="font-semibold">I understand that these details are final.</span> Once the
+            shop is created, its name, location and address cannot be changed.
+          </span>
+        </label>
+
         {error && (
           <div className="flex items-start gap-2 rounded-2xl bg-clay-50 px-4 py-3 text-[13.5px] font-medium text-clay-700">
             <Icon name="alert" className="mt-0.5 h-4 w-4 shrink-0" strokeWidth={2} />
@@ -155,7 +184,7 @@ export default function CreateShop() {
           </div>
         )}
 
-          <Button type="submit" size="lg" loading={busy} className="w-full !mt-6">
+          <Button type="submit" size="lg" loading={busy} disabled={!acknowledged} className="w-full !mt-6">
             Create shop
           </Button>
         </Container>

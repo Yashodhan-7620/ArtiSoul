@@ -8,11 +8,13 @@ import { formatPrice } from '../lib/format';
 import { Container } from '../components/AppShell';
 import { useAuth } from '../context/AuthContext';
 import ChatWindow from '../components/ChatWindow';
+import LiveBroadcast from '../components/LiveBroadcast';
 
 // Status pill colours
 function StatusPill({ status }) {
   const styles = {
     Pending:   'bg-amber-100 text-amber-700',
+    Accepted:  'bg-sky-100 text-sky-700',
     Delivered: 'bg-sage-100 text-sage-700',
     Cancelled: 'bg-clay-50 text-clay-600',
   };
@@ -23,7 +25,8 @@ function StatusPill({ status }) {
   );
 }
 
-function OrderRow({ order, onMarkDelivered }) {
+function OrderRow({ order, onSetStatus, onGoLive }) {
+  const link = 'text-[11.5px] font-semibold hover:underline';
   return (
     <div className="flex items-start gap-3 rounded-2xl border border-cream-300 bg-white p-3">
       <div className="min-w-0 flex-1">
@@ -38,12 +41,31 @@ function OrderRow({ order, onMarkDelivered }) {
       <div className="flex shrink-0 flex-col items-end gap-2">
         <StatusPill status={order.status} />
         {order.status === 'Pending' && (
-          <button
-            onClick={() => onMarkDelivered(order.order_id)}
-            className="text-[11.5px] font-semibold text-sage-600 hover:underline"
-          >
-            Mark Delivered
-          </button>
+          <div className="flex gap-3">
+            <button onClick={() => onSetStatus(order.order_id, 'Cancelled')} className={`${link} text-clay-600`}>
+              Decline
+            </button>
+            <button
+              onClick={() => onSetStatus(order.order_id, 'Accepted')}
+              className="rounded-full bg-sage-600 px-3 py-1 text-[12px] font-semibold text-white hover:bg-sage-500"
+            >
+              Accept
+            </button>
+          </div>
+        )}
+        {order.status === 'Accepted' && (
+          <>
+            <button
+              onClick={() => onGoLive(order)}
+              className="inline-flex items-center gap-1.5 rounded-full bg-red-600 px-3 py-1 text-[12px] font-semibold text-white hover:bg-red-700"
+            >
+              <Icon name="video" className="h-3.5 w-3.5" />
+              {order.stream_status === 'live' ? 'Resume live' : 'Start live'}
+            </button>
+            <button onClick={() => onSetStatus(order.order_id, 'Delivered')} className={`${link} text-sage-600`}>
+              Mark Delivered
+            </button>
+          </>
         )}
       </div>
     </div>
@@ -120,6 +142,7 @@ export default function Dashboard() {
   const [orders, setOrders] = useState([]);
   const [conversations, setConversations] = useState([]);
   const [selectedConversation, setSelectedConversation] = useState(null);
+  const [liveOrder, setLiveOrder] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
 
@@ -160,15 +183,25 @@ export default function Dashboard() {
     }
   }, [token]);
 
-  const handleMarkDelivered = async (orderId) => {
+  const handleSetStatus = async (orderId, status) => {
+    if (status === 'Cancelled' && !window.confirm('Decline this order? The customer will see it as cancelled.')) return;
     try {
-      await api.orders.updateStatus(orderId, 'Delivered', token);
+      await api.orders.updateStatus(orderId, status, token);
       setOrders((prev) =>
-        prev.map((o) => (o.order_id === orderId ? { ...o, status: 'Delivered' } : o))
+        prev.map((o) =>
+          o.order_id === orderId
+            ? { ...o, status, stream_status: status === 'Accepted' ? o.stream_status : 'ended' }
+            : o
+        )
       );
     } catch (err) {
       alert(err.message);
     }
+  };
+
+  const closeLive = () => {
+    setLiveOrder(null);
+    api.orders.shop(token).then(({ data }) => setOrders(data)).catch(() => {});
   };
 
   useEffect(() => {
@@ -363,11 +396,12 @@ export default function Dashboard() {
               ) : (
                 <div className="space-y-2.5">
                   {orders.map((o) => (
-                    <OrderRow key={o.order_id} order={o} onMarkDelivered={handleMarkDelivered} />
+                    <OrderRow key={o.order_id} order={o} onSetStatus={handleSetStatus} onGoLive={setLiveOrder} />
                   ))}
                 </div>
               )}
             </section>
+            {liveOrder && <LiveBroadcast order={liveOrder} onClose={closeLive} />}
           </div>
         )}
         </Container>

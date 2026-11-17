@@ -6,7 +6,7 @@ export default defineConfig({
   server: {
     host: '0.0.0.0',
     allowedHosts: [
-      'careers-timer-illustrations-tooth.trycloudflare.com'
+      'realty-northwest-monitor-politics.trycloudflare.com'
     ],
     // One tunnel/origin for everything: the browser only talks to Vite,
     // which forwards API calls and uploaded files to the Express backend.
