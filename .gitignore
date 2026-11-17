@@ -13,6 +13,7 @@ build/
 .dev.vars*
 .wrangler/
 
+
 # Local database exports (contain user data)
 db-export/
 secret.txt
