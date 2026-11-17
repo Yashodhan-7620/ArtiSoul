@@ -12,6 +12,7 @@ build/
 .DS_Store
 .dev.vars*
 .wrangler/
+backend/uploads/
 
 
 # Local database exports (contain user data)
