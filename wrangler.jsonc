@@ -1,0 +1,51 @@
+// Cloudflare deployment for ArtiSoul: one Worker serves the React app
+// (static assets) and the Express API. See CLOUDFLARE.md for setup steps.
+{
+  "$schema": "./node_modules/wrangler/config-schema.json",
+  "name": "artisoul",
+  "main": "backend/src/worker.mjs",
+  "compatibility_date": "2025-10-01",
+  "compatibility_flags": ["nodejs_compat"],
+
+  // `wrangler deploy` / `wrangler dev` build the frontend first.
+  "build": {
+    "command": "npm run build --prefix frontend"
+  },
+
+  // frontend/dist is served directly by Cloudflare; unknown paths fall back to
+  // index.html so React Router deep links (/product/12, /artisan) work.
+  // Only API calls and uploaded files run the Worker.
+  "assets": {
+    "directory": "frontend/dist",
+    "not_found_handling": "single-page-application",
+    "run_worker_first": ["/api/*", "/uploads/*"]
+  },
+
+  // MySQL, reached through Hyperdrive. Replace the id with the one printed by
+  //   npx wrangler hyperdrive create artisoul-db --connection-string="mysql://..."
+  // For `wrangler dev` against your local MySQL, set this env var first:
+  //   $env:CLOUDFLARE_HYPERDRIVE_LOCAL_CONNECTION_STRING_HYPERDRIVE = "mysql://root:<pw>@127.0.0.1:3306/artisoul"
+  "hyperdrive": [
+    {
+      "binding": "HYPERDRIVE",
+      "id": "REPLACE_WITH_HYPERDRIVE_ID"
+    }
+  ],
+
+  // Uploaded photos, videos and .glb models.
+  "r2_buckets": [
+    {
+      "binding": "UPLOADS",
+      "bucket_name": "artisoul-uploads"
+    }
+  ],
+
+  // Non-secret settings. Secrets (JWT_SECRET, TEST_KEY_ID, TEST_KEY_SECRET)
+  // are set with `npx wrangler secret put <NAME>`; for `wrangler dev` put them
+  // in a .dev.vars file next to this one.
+  "vars": {
+    "JWT_EXPIRES_IN": "7d"
+  },
+
+  "observability": { "enabled": true }
+}

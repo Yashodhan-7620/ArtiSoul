@@ -16,11 +16,19 @@
   },
   "homepage": "https://github.com/Yashodhan-7620/ArtiSoul#readme",
   "devDependencies": {
-    "concurrently": "^10.0.5"
+    "concurrently": "^10.0.5",
+    "wrangler": "^4.163.0"
   },
   "scripts": {
     "backend": "npm start --prefix ./backend",
     "frontend": "npm run dev --prefix ./frontend",
-    "dev": "concurrently -n BACKEND,FRONTEND -c blue,green \"npm run backend\" \"npm run frontend\""
+    "dev": "concurrently -n BACKEND,FRONTEND -c blue,green \"npm run backend\" \"npm run frontend\"",
+    "cf:setup": "powershell -ExecutionPolicy Bypass -File scripts/cloudflare/setup.ps1",
+    "cf:dev": "wrangler dev",
+    "cf:deploy": "wrangler deploy",
+    "cf:upload-existing": "powershell -ExecutionPolicy Bypass -File scripts/cloudflare/upload-existing-files.ps1",
+    "cf:logs": "wrangler tail",
+    "railway:import": "powershell -ExecutionPolicy Bypass -File scripts/railway/import-to-railway.ps1",
+    "make-admin": "node backend/scripts/make-admin.js"
   }
 }

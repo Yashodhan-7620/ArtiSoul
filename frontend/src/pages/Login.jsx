@@ -5,14 +5,15 @@ import Icon from '../components/Icon';
 import { Field, Input } from '../components/Field';
 import AuthLayout from '../components/AuthLayout';
 import { useAuth } from '../context/AuthContext';
+import { useT } from '../i18n';
 
 export default function Login() {
   const { login } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
+  const { t } = useT();
 
   const [form, setForm] = useState({ phone: '', password: '' });
-  const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
 
@@ -24,7 +25,7 @@ export default function Login() {
     setBusy(true);
     try {
       const data = await login(form.phone.trim(), form.password);
-      const fallback = data.user.role === 'artisan' ? '/artisan' : '/feed';
+      const fallback = { artisan: '/artisan', admin: '/admin' }[data.user.role] || '/feed';
       navigate(location.state?.from || fallback, { replace: true });
     } catch (err) {
       setError(err.message);
@@ -37,7 +38,7 @@ export default function Login() {
     <AuthLayout>
       <Link
         to="/"
-        aria-label="Back"
+        aria-label={t('common.back')}
         className="-ml-2 grid h-9 w-9 place-items-center rounded-full text-ink-500 transition hover:bg-cream-200"
       >
         <Icon name="back" />
@@ -45,15 +46,13 @@ export default function Login() {
 
       <div className="mt-6 animate-fade-up">
         <h1 className="font-display text-[32px] font-semibold leading-tight text-ink-800">
-          Welcome back
+          {t('auth.welcome_back')}
         </h1>
-        <p className="mt-1.5 text-[14.5px] text-ink-400">
-          Log in with the phone number you signed up with.
-        </p>
+        <p className="mt-1.5 text-[14.5px] text-ink-400">{t('auth.login_hint')}</p>
       </div>
 
       <form onSubmit={handleSubmit} className="mt-8 space-y-4">
-        <Field label="Phone number" id="phone">
+        <Field label={t('auth.phone')} id="phone">
           <Input
             id="phone"
             name="phone"
@@ -67,58 +66,17 @@ export default function Login() {
           />
         </Field>
 
-        <Field label="Password" id="password">
-          <div className="relative flex items-center">
-            <Input
-              id="password"
-              name="password"
-              type={showPassword ? 'text' : 'password'}
-              autoComplete="current-password"
-              placeholder="••••••••"
-              value={form.password}
-              onChange={set('password')}
-              className="pr-11"
-              required
-            />
-            <button
-              type="button"
-              onClick={() => setShowPassword((prev) => !prev)}
-              aria-label={showPassword ? 'Hide password' : 'Show password'}
-              className="absolute right-3 grid h-8 w-8 place-items-center rounded-full text-ink-400 transition hover:bg-cream-200 hover:text-ink-700"
-            >
-              {showPassword ? (
-                <svg
-                  xmlns="http://www.w3.org/2000/svg"
-                  width="18"
-                  height="18"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth="2"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                >
-                  <path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24" />
-                  <line x1="1" y1="1" x2="23" y2="23" />
-                </svg>
-              ) : (
-                <svg
-                  xmlns="http://www.w3.org/2000/svg"
-                  width="18"
-                  height="18"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth="2"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                >
-                  <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" />
-                  <circle cx="12" cy="12" r="3" />
-                </svg>
-              )}
-            </button>
-          </div>
+        <Field label={t('auth.password')} id="password">
+          <Input
+            id="password"
+            name="password"
+            type="password"
+            autoComplete="current-password"
+            placeholder="••••••••"
+            value={form.password}
+            onChange={set('password')}
+            required
+          />
         </Field>
 
         {error && (
@@ -129,14 +87,14 @@ export default function Login() {
         )}
 
         <Button type="submit" size="lg" loading={busy} className="w-full !mt-6">
-          Log in
+          {t('auth.login')}
         </Button>
       </form>
 
       <p className="mt-6 text-center text-[13.5px] text-ink-400">
-        New to ArtiSoul?{' '}
+        {t('auth.new_here')}{' '}
         <Link to="/signup" className="font-semibold text-clay-600 underline-offset-4 hover:underline">
-          Create an account
+          {t('auth.create_account')}
         </Link>
       </p>
     </AuthLayout>

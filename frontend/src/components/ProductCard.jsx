@@ -1,5 +1,7 @@
 import { Link } from 'react-router-dom';
 import Icon from './Icon';
+import Stars from './Stars';
+import { useT } from '../i18n';
 import { formatDistance, formatPrice } from '../lib/format';
 
 // Deterministic warm placeholder so a product without a photo still looks
@@ -21,8 +23,14 @@ export default function ProductCard({ product }) {
     shop_name,
     distance_km,
     stock_status,
+    avg_rating,
+    review_count,
+    latest_review,
+    latest_reviewer,
   } = product;
+  const reviews = Number(review_count) || 0;
 
+  const { t, tc } = useT();
   const tint = TINTS[Number(product_id ?? 0) % TINTS.length];
   const soldOut = stock_status === 'out_of_stock';
 
@@ -63,7 +71,7 @@ export default function ProductCard({ product }) {
 
         {soldOut && (
           <span className="absolute right-3 top-3 rounded-full bg-ink-900/70 px-2.5 py-1 text-[11px] font-semibold text-cream-100">
-            Sold out
+            {t('product.sold_out')}
           </span>
         )}
       </div>
@@ -71,7 +79,7 @@ export default function ProductCard({ product }) {
       <div className="space-y-1.5 p-4">
         {category && (
           <span className="text-[11px] font-bold uppercase tracking-[0.09em] text-clay-500">
-            {category}
+            {tc(category)}
           </span>
         )}
         <h3 className="line-clamp-2 font-display text-[17px] font-semibold leading-snug text-ink-800">
@@ -85,6 +93,27 @@ export default function ProductCard({ product }) {
           </span>
           {shop_name && (
             <span className="mt-0.5 block truncate text-[12.5px] text-ink-400">{shop_name}</span>
+          )}
+        </div>
+
+        {/* Buyer reviews */}
+        <div className="border-t border-cream-200 pt-2">
+          {reviews > 0 ? (
+            <>
+              <div className="flex items-center gap-1.5">
+                <Stars value={avg_rating} size="h-3.5 w-3.5" />
+                <span className="text-[12px] font-semibold text-ink-700">{Number(avg_rating).toFixed(1)}</span>
+                <span className="text-[12px] text-ink-400">({t('product.reviews', { count: reviews })})</span>
+              </div>
+              {latest_review && (
+                <p className="mt-1 line-clamp-2 text-[12.5px] italic leading-snug text-ink-500">
+                  “{latest_review}”
+                  {latest_reviewer && <span className="not-italic text-ink-400"> · {latest_reviewer}</span>}
+                </p>
+              )}
+            </>
+          ) : (
+            <span className="text-[12px] text-ink-400">{t('product.no_reviews_short')}</span>
           )}
         </div>
       </div>

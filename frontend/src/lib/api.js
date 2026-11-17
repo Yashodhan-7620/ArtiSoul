@@ -68,9 +68,9 @@ export const api = {
   shops: {
     create: (body, token) => request('/api/shops/create', { method: 'POST', body, token }),
     mine: (token) => request('/api/shops/mine', { token }),
-    updateQr: (upi_qr_url, token) =>
-      request('/api/shops/my-qr', { method: 'PUT', body: { upi_qr_url }, token }),
-    getQr: (shopId) => request(`/api/shops/qr/${shopId}`),
+    // Shop details are final; a shop without a picture may add one, once.
+    setImage: (shopId, image_url, token) =>
+      request(`/api/shops/${shopId}/image`, { method: 'POST', body: { image_url }, token }),
   },
 
   products: {
@@ -84,6 +84,16 @@ export const api = {
     update: (id, body, token) => request(`/api/products/${id}`, { method: 'PUT', body, token }),
     remove: (id, token) => request(`/api/products/${id}`, { method: 'DELETE', token }),
     byShop: (shopId) => request(`/api/products/shop/${shopId}`),
+    recommended: ({ lat, lng, productId, limit } = {}, token) => {
+      const qs = new URLSearchParams();
+      if (Number.isFinite(lat) && Number.isFinite(lng)) {
+        qs.set('lat', lat);
+        qs.set('lng', lng);
+      }
+      if (productId) qs.set('product_id', productId);
+      if (limit) qs.set('limit', limit);
+      return request(`/api/products/recommended?${qs}`, { token });
+    },
   },
 
   uploads: {
@@ -105,33 +115,106 @@ export const api = {
   },
 
   orders: {
-    // Supports full checkout payload object: api.orders.create(payload, token)
-    // as well as legacy signature: api.orders.create(product_id, token, quantity)
-    create: (payloadOrProductId, token, quantity = 1) => {
-      const body =
-        typeof payloadOrProductId === 'object' && payloadOrProductId !== null
-          ? payloadOrProductId
-          : { product_id: payloadOrProductId, quantity };
-      return request('/api/orders', { method: 'POST', body, token });
-    },
+    // Customer places an order for a product
+    create: (product_id, token, quantity = 1) =>
+      request('/api/orders', { method: 'POST', body: { product_id, quantity }, token }),
 
     // Customer fetches their own purchase history
     mine: (token) => request('/api/orders/mine', { token }),
 
     checkout: (body, token) => request('/api/orders/checkout', { method: 'POST', body, token }),
+    checkoutCart: (body, token) => request('/api/orders/checkout-cart', { method: 'POST', body, token }),
+    timeline: (orderId, token) => request(`/api/orders/${orderId}/timeline`, { token }),
+    scheduleLive: (orderId, scheduled_at, token) =>
+      request(`/api/orders/${orderId}/live-schedule`, { method: 'PATCH', body: { scheduled_at }, token }),
+    sales: (token) => request('/api/orders/sales', { token }),
+    confirmCod: (orderId, token) => request(`/api/orders/${orderId}/cod-confirm`, { method: 'POST', token }),
     verifyPayment: (body, token) =>
       request('/api/orders/verify-payment', { method: 'POST', body, token }),
+
+    // Customer reviews a delivered order (once; reviews cannot be edited)
+    review: (orderId, body, token) =>
+      request(`/api/orders/${orderId}/review`, { method: 'POST', body, token }),
 
     // Artisan fetches all orders incoming to their shop(s)
     shop: (token) => request('/api/orders/shop', { token }),
 
-    // Artisan marks an order Delivered / Cancelled (and optionally updates payment_status)
-    updateStatus: (orderId, status, token, payment_status) =>
-      request(`/api/orders/${orderId}/status`, {
-        method: 'PATCH',
-        body: payment_status ? { status, payment_status } : { status },
-        token,
-      }),
+    // Artisan accepts an order or marks it Delivered / Cancelled
+    updateStatus: (orderId, status, token) =>
+      request(`/api/orders/${orderId}/status`, { method: 'PATCH', body: { status }, token }),
+  },
+
+  // Private per-order livestream signalling (see components/LiveBroadcast.jsx)
+  streams: {
+    state: (orderId, token) => request(`/api/streams/${orderId}`, { token }),
+    start: (orderId, offer, token) =>
+      request(`/api/streams/${orderId}/start`, { method: 'POST', body: { offer }, token }),
+    offer: (orderId, offer, version, token) =>
+      request(`/api/streams/${orderId}/offer`, { method: 'PUT', body: { offer, version }, token }),
+    answer: (orderId, answer, version, token) =>
+      request(`/api/streams/${orderId}/answer`, { method: 'POST', body: { answer, version }, token }),
+    rejoin: (orderId, token) => request(`/api/streams/${orderId}/rejoin`, { method: 'POST', token }),
+    end: (orderId, token) => request(`/api/streams/${orderId}/end`, { method: 'POST', token }),
+  },
+
+  cart: {
+    get: (token) => request('/api/cart', { token }),
+    add: (product_id, quantity, token) => request('/api/cart', { method: 'POST', body: { product_id, quantity }, token }),
+    update: (productId, quantity, token) =>
+      request(`/api/cart/${productId}`, { method: 'PUT', body: { quantity }, token }),
+    remove: (productId, token) => request(`/api/cart/${productId}`, { method: 'DELETE', token }),
+  },
+
+  wishlists: {
+    list: (token) => request('/api/wishlists', { token }),
+    create: (name, token) => request('/api/wishlists', { method: 'POST', body: { name }, token }),
+    rename: (id, name, token) => request(`/api/wishlists/${id}`, { method: 'PATCH', body: { name }, token }),
+    remove: (id, token) => request(`/api/wishlists/${id}`, { method: 'DELETE', token }),
+    addItem: (id, product_id, token) =>
+      request(`/api/wishlists/${id}/items`, { method: 'POST', body: { product_id }, token }),
+    removeItem: (id, productId, token) =>
+      request(`/api/wishlists/${id}/items/${productId}`, { method: 'DELETE', token }),
+  },
+
+  notifications: {
+    list: (token) => request('/api/notifications', { token }),
+    unreadCount: (token) => request('/api/notifications/unread-count', { token }),
+    markRead: (ids, token) => request('/api/notifications/read', { method: 'POST', body: { ids }, token }),
+  },
+
+  ai: {
+    status: (token) => request('/api/ai/status', { token }),
+    listing: (file, lang, token) => {
+      const form = new FormData();
+      form.append('image', file);
+      form.append('lang', lang);
+      return request('/api/ai/listing', { method: 'POST', body: form, token, form: true });
+    },
+  },
+
+  events: {
+    venues: () => request('/api/events/venues'),
+    list: (token) => request('/api/events', { token }),
+    create: (body, token) => request('/api/events', { method: 'POST', body, token }),
+    respond: (id, body, token) => request(`/api/events/${id}/respond`, { method: 'POST', body, token }),
+    approve: (id, note, token) => request(`/api/events/${id}/approve`, { method: 'POST', body: { note }, token }),
+    reject: (id, note, token) => request(`/api/events/${id}/reject`, { method: 'POST', body: { note }, token }),
+  },
+
+  ranks: {
+    list: () => request('/api/ranks'),
+    mine: (token) => request('/api/ranks/me', { token }),
+  },
+
+  admin: {
+    overview: (token) => request('/api/admin/overview', { token }),
+    activity: (params, token) => request(`/api/admin/activity?${new URLSearchParams(params)}`, { token }),
+    users: (params, token) => request(`/api/admin/users?${new URLSearchParams(params)}`, { token }),
+    setUserStatus: (id, active, reason, token) =>
+      request(`/api/admin/users/${id}/status`, { method: 'PATCH', body: { active, reason }, token }),
+    orders: (params, token) => request(`/api/admin/orders?${new URLSearchParams(params)}`, { token }),
+    reviews: (token) => request('/api/admin/reviews', { token }),
+    removeReview: (id, reason, token) => request(`/api/admin/reviews/${id}`, { method: 'DELETE', body: { reason }, token }),
   },
 
   chat: {

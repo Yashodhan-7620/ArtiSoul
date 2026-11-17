@@ -1,9 +1,19 @@
-# Ignore dependencies
+frontend/node_modules
+backend/node_modules
+backend/.env
+node_modules
+.env
 node_modules/
+.env.*
+!.env.example
+dist/
+build/
+*.log
+.DS_Store
+.dev.vars*
+.wrangler/
 
-# Ignore environment files and credentials
-.env
-**/.env
-.env
 
-backend/uploads/
+# Local database exports (contain user data)
+db-export/
+secret.txt

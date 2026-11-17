@@ -1,32 +1,60 @@
 import { useEffect, useState } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { Link, useParams, useNavigate } from 'react-router-dom';
 import EmptyState from '../components/EmptyState';
 import Icon from '../components/Icon';
 import TopBar from '../components/TopBar';
 import Button from '../components/Button';
 import { Container } from '../components/AppShell';
 import { api } from '../lib/api';
-import { formatPrice } from '../lib/format';
+import { formatDate, formatPrice } from '../lib/format';
+import Stars from '../components/Stars';
 import { useAuth } from '../context/AuthContext';
+import { useBadges } from '../context/BadgesContext';
+import { useToast } from '../components/Toast';
+import { useT } from '../i18n';
 import ChatWindow from '../components/ChatWindow';
 import PreviewPanel from '../components/PreviewPanel';
+import WishlistButton from '../components/WishlistButton';
+import Recommendations from '../components/Recommendations';
+import RankBadge from '../components/RankBadge';
 
 export default function ProductDetail() {
   const { id } = useParams();
   const navigate = useNavigate();
-  const { user } = useAuth();
+  const { user, token } = useAuth();
+  const { refreshCart } = useBadges();
+  const toast = useToast();
+  const { t, tc } = useT();
   const [product, setProduct] = useState(null);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(true);
+  const [adding, setAdding] = useState(false);
+
+  const isBuyer = !user || user.role === 'customer';
 
   const handleBuyNow = () => {
-    const targetProductId = product?.product_id || id;
-    const checkoutPath = `/checkout/${targetProductId}`;
     if (!user) {
-      navigate('/login', { state: { redirectTo: checkoutPath, from: checkoutPath } });
+      navigate('/login', { state: { from: `/checkout/${id}` } });
       return;
     }
-    navigate(checkoutPath);
+    navigate(`/checkout/${id}`);
+  };
+
+  const handleAddToCart = async () => {
+    if (!user) {
+      navigate('/login', { state: { from: `/product/${id}` } });
+      return;
+    }
+    setAdding(true);
+    try {
+      await api.cart.add(product.product_id, 1, token);
+      refreshCart();
+      toast.success(t('product.added_to_cart'));
+    } catch (err) {
+      toast.error(err.message);
+    } finally {
+      setAdding(false);
+    }
   };
 
   useEffect(() => {
@@ -45,7 +73,7 @@ export default function ProductDetail() {
   if (loading) {
     return (
       <div className="flex min-h-0 flex-1 flex-col">
-        <TopBar title="Loading…" back />
+        <TopBar title={t('common.loading')} back />
         <div className="min-h-0 flex-1 overflow-y-auto scroll-clean p-5 md:px-8">
           <Container className="space-y-4 md:grid md:grid-cols-2 md:gap-8 md:space-y-0">
             <div className="skeleton aspect-square w-full rounded-3xl" />
@@ -62,8 +90,8 @@ export default function ProductDetail() {
   if (error || !product) {
     return (
       <div className="flex min-h-0 flex-1 flex-col">
-        <TopBar title="Product" back />
-        <EmptyState icon="alert" title="Not found" message={error || 'This product no longer exists.'} />
+        <TopBar title={t('product.title')} back />
+        <EmptyState icon="alert" title={t('product.not_found')} message={error || t('product.gone')} />
       </div>
     );
   }
@@ -89,7 +117,7 @@ export default function ProductDetail() {
             {soldOut && (
               <div className="absolute inset-0 grid place-items-center bg-ink-900/45">
                 <span className="rounded-full bg-cream-100 px-4 py-2 text-[13px] font-bold uppercase tracking-wide text-ink-800">
-                  Sold out
+                  {t('product.sold_out')}
                 </span>
               </div>
             )}
@@ -99,7 +127,7 @@ export default function ProductDetail() {
             <div>
               {product.category && (
                 <span className="text-[11px] font-bold uppercase tracking-[0.09em] text-clay-500">
-                  {product.category}
+                  {tc(product.category)}
                 </span>
               )}
               <h2 className="mt-1 font-display text-[26px] font-semibold leading-tight text-ink-900 md:text-[34px]">
@@ -108,8 +136,17 @@ export default function ProductDetail() {
               <p className="mt-2 font-display text-[24px] font-semibold text-clay-600 md:text-[28px]">
                 {formatPrice(product.price)}
               </p>
+              {product.review_count > 0 && (
+                <a href="#reviews" className="mt-1.5 inline-flex items-center gap-1.5">
+                  <Stars value={product.avg_rating} size="h-4 w-4" />
+                  <span className="text-[13px] font-semibold text-ink-700">{Number(product.avg_rating).toFixed(1)}</span>
+                  <span className="text-[13px] text-ink-400 hover:underline">
+                    ({t('product.reviews', { count: product.review_count })})
+                  </span>
+                </a>
+              )}
               {!soldOut && product.stock_quantity > 0 && product.stock_quantity <= 5 && (
-                <p className="mt-1 text-[13px] font-semibold text-clay-600">Only {product.stock_quantity} left</p>
+                <p className="mt-1 text-[13px] font-semibold text-clay-600">{t('cart.only_left', { count: product.stock_quantity })}</p>
               )}
             </div>
 
@@ -119,51 +156,94 @@ export default function ProductDetail() {
               </p>
             )}
 
-            <div className="rounded-3xl border border-cream-300 bg-white p-4 md:p-5">
-              <p className="text-[11px] font-bold uppercase tracking-[0.1em] text-ink-400">Made by</p>
-              <p className="mt-1.5 font-display text-[18px] font-semibold text-ink-800 md:text-[20px]">
-                {product.shop_name}
-              </p>
-              {product.address && (
-                <p className="mt-1 text-[13.5px] leading-relaxed text-ink-500">{product.address}</p>
+            <div className="flex gap-3 rounded-3xl border border-cream-300 bg-white p-4 md:p-5">
+              {product.shop_image_url && (
+                <img src={product.shop_image_url} alt="" className="h-16 w-16 shrink-0 rounded-2xl object-cover" />
               )}
-
-              <a
-                href={mapsUrl}
-                target="_blank"
-                rel="noreferrer noopener"
-                className="mt-3.5 inline-flex items-center gap-1.5 rounded-full bg-cream-200 px-3.5 py-2
-                           text-[13px] font-semibold text-ink-700 transition hover:bg-cream-300 active:scale-95"
-              >
-                <Icon name="pin" className="h-3.5 w-3.5 text-clay-500" strokeWidth={2} />
-                Open in Maps
-                <Icon name="chevron" className="h-3 w-3 text-ink-400" strokeWidth={2.2} />
-              </a>
-            </div>
-
-            {/* ── Preview gallery + Buy Now -> Navigates to Checkout ── */}
-            <PreviewPanel product={product} />
-            <div className="space-y-2">
-              <Button
-                id="buy-now-btn"
-                onClick={handleBuyNow}
-                disabled={soldOut}
-                className="w-full"
-              >
-                {soldOut ? 'Out of Stock' : 'Buy Now'}
-              </Button>
-              {!user && (
-                <p className="px-1 text-center text-[12px] text-ink-400">
-                  You'll be asked to log in first.
+              <div className="min-w-0">
+                <p className="text-[11px] font-bold uppercase tracking-[0.1em] text-ink-400">{t('product.made_by')}</p>
+                <p className="mt-1.5 font-display text-[18px] font-semibold text-ink-800 md:text-[20px]">
+                  {product.shop_name}
                 </p>
-              )}
+                <Link to="/how-it-works" className="mt-1 inline-block">
+                  <RankBadge rank={product.artisan_rank || 'none'} />
+                </Link>
+                {product.address && (
+                  <p className="mt-1 text-[13.5px] leading-relaxed text-ink-500">{product.address}</p>
+                )}
+
+                <a
+                  href={mapsUrl}
+                  target="_blank"
+                  rel="noreferrer noopener"
+                  className="mt-3.5 inline-flex items-center gap-1.5 rounded-full bg-cream-200 px-3.5 py-2
+                             text-[13px] font-semibold text-ink-700 transition hover:bg-cream-300 active:scale-95"
+                >
+                  <Icon name="pin" className="h-3.5 w-3.5 text-clay-500" strokeWidth={2} />
+                  {t('product.open_maps')}
+                  <Icon name="chevron" className="h-3 w-3 text-ink-400" strokeWidth={2.2} />
+                </a>
+              </div>
             </div>
+
+            {/* ── Preview gallery + buying ── */}
+            <PreviewPanel product={product} />
+            {isBuyer && (
+              <div className="space-y-2">
+                <div className="flex gap-2">
+                  <Button id="buy-now-btn" size="lg" onClick={handleBuyNow} disabled={soldOut} className="flex-1">
+                    {soldOut ? t('product.out_of_stock') : t('product.buy_now')}
+                  </Button>
+                  <Button size="lg" variant="secondary" onClick={handleAddToCart} disabled={soldOut} loading={adding} aria-label={t('product.add_to_cart')}>
+                    <Icon name="cart" className="h-5 w-5" />
+                    <span className="hidden sm:inline">{t('product.add_to_cart')}</span>
+                  </Button>
+                  <WishlistButton productId={product.product_id} />
+                </div>
+                {!user && (
+                  <p className="px-1 text-center text-[12px] text-ink-400">{t('product.login_first')}</p>
+                )}
+              </div>
+            )}
+
+            {/* ── Buyer reviews ── */}
+            <section id="reviews" className="scroll-mt-24">
+              <h3 className="font-display text-[18px] font-semibold text-ink-800">
+                {t('product.reviews_title')}{product.review_count > 0 && ` (${product.review_count})`}
+              </h3>
+              {!product.reviews?.length ? (
+                <p className="mt-1.5 text-[13.5px] text-ink-400">{t('product.no_reviews')}</p>
+              ) : (
+                <div className="mt-3 space-y-2.5">
+                  {product.reviews.map((r) => (
+                    <article key={r.review_id} className="rounded-2xl border border-cream-300 bg-white px-4 py-3">
+                      <div className="flex items-center justify-between gap-2">
+                        <Stars value={r.rating} size="h-4 w-4" />
+                        <span className="text-[11.5px] text-ink-400">{formatDate(r.created_at)}</span>
+                      </div>
+                      {r.comment && (
+                        <p className="mt-1.5 text-[13.5px] leading-relaxed text-ink-600">{r.comment}</p>
+                      )}
+                      <p className="mt-1 text-[12px] font-medium text-ink-400">
+                        {r.reviewer} · {t('product.verified_buyer')}
+                      </p>
+                    </article>
+                  ))}
+                </div>
+              )}
+            </section>
+
+            <Recommendations productId={product.product_id} title={t('reco.also_like')} />
+
+            {user?.role === 'artisan' && (
+              <Link to="/artisan" className="block text-center text-[13px] font-semibold text-clay-600 hover:underline">
+                {t('product.back_to_shop')}
+              </Link>
+            )}
           </div>
         </Container>
       </div>
-      {user?.role !== 'artisan' && (
-        <ChatWindow shopId={product.shop_id} recipientName={product.shop_name} />
-      )}
+      {isBuyer && <ChatWindow shopId={product.shop_id} recipientName={product.shop_name} />}
     </div>
   );
 }

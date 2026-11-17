@@ -1,5 +1,7 @@
 const { pool } = require('../config/db');
 const asyncHandler = require('../utils/asyncHandler');
+const { audit } = require('../utils/audit');
+const { artisanStats } = require('../utils/ranks');
 
 const ANGLES = ['front', 'right', 'back', 'left', 'top', 'bottom'];
 const isUrl = (u) => typeof u === 'string' && /^(https?:\/\/|\/uploads\/)/.test(u);
@@ -73,6 +75,7 @@ const addProduct = asyncHandler(async (req, res) => {
      stock_quantity > 0 ? 'in_stock' : 'out_of_stock', stock_quantity, x.enable360 ? 1 : 0, x.model_url]
   );
   await saveExtras(result.insertId, x);
+  await audit(req, 'product.create', { entity: 'product', entityId: result.insertId });
 
   res.status(201).json({
     success: true,
@@ -129,6 +132,8 @@ const getNearbyProducts = asyncHandler(async (req, res) => {
         p.product_id, p.name, p.price, p.category, p.image_url,
         p.description, p.stock_status,
         s.shop_id, s.shop_name, s.address, s.latitude, s.longitude,
+        COALESCE(rv.avg_rating, 0) AS avg_rating, COALESCE(rv.review_count, 0) AS review_count,
+        lr.comment AS latest_review, lr.reviewer AS latest_reviewer, lr.rating AS latest_review_rating,
         (
           6371 * ACOS(
             COS(RADIANS(?)) * COS(RADIANS(s.latitude)) *
@@ -138,6 +143,19 @@ const getNearbyProducts = asyncHandler(async (req, res) => {
         ) AS distance_km
     FROM Products p
     JOIN Shops s ON p.shop_id = s.shop_id
+    -- Buyer reviews: average + count, and the newest written review for the card
+    LEFT JOIN (
+      SELECT product_id, ROUND(AVG(rating), 1) AS avg_rating, COUNT(*) AS review_count
+      FROM Reviews GROUP BY product_id
+    ) rv ON rv.product_id = p.product_id
+    LEFT JOIN (
+      SELECT r.product_id, r.rating, r.comment, SUBSTRING_INDEX(u.name, ' ', 1) AS reviewer
+      FROM Reviews r JOIN Users u ON u.user_id = r.customer_id
+      WHERE r.comment IS NOT NULL
+        AND r.review_id = (SELECT r2.review_id FROM Reviews r2
+                           WHERE r2.product_id = r.product_id AND r2.comment IS NOT NULL
+                           ORDER BY r2.created_at DESC, r2.review_id DESC LIMIT 1)
+    ) lr ON lr.product_id = p.product_id
     WHERE p.stock_status = 'in_stock'
     ${categoryFilter}
     HAVING distance_km <= ?
@@ -154,11 +172,10 @@ const getNearbyProducts = asyncHandler(async (req, res) => {
 });
 
 // GET /api/products/:id (extra convenience route — product detail page)
-// GET /api/products/:id (extra convenience route - product detail page)
 const getProductById = asyncHandler(async (req, res) => {
   const { id } = req.params;
   const [rows] = await pool.query(
-    `SELECT p.*, s.shop_name, s.address, s.latitude, s.longitude, s.upi_qr_url
+    `SELECT p.*, s.shop_name, s.artisan_id, s.latitude, s.longitude, s.address, s.image_url AS shop_image_url
      FROM Products p
      JOIN Shops s ON p.shop_id = s.shop_id
      WHERE p.product_id = ?`,
@@ -180,7 +197,23 @@ const getProductById = asyncHandler(async (req, res) => {
     v.forEach((r) => { views360[r.angle] = r.url; });
   }
 
-  res.json({ success: true, data: { ...rows[0], media, views360 } });
+  // Buyer reviews are public; only the reviewer's first name is shown.
+  const [reviews] = await pool.query(
+    `SELECT r.review_id, r.rating, r.comment, r.created_at, SUBSTRING_INDEX(u.name, ' ', 1) AS reviewer
+     FROM Reviews r JOIN Users u ON u.user_id = r.customer_id
+     WHERE r.product_id = ?
+     ORDER BY r.created_at DESC, r.review_id DESC`,
+    [id]
+  );
+  const review_count = reviews.length;
+  const avg_rating = review_count
+    ? Math.round((reviews.reduce((sum, r) => sum + r.rating, 0) / review_count) * 10) / 10
+    : 0;
+
+  const [maker] = await artisanStats([rows[0].artisan_id]);
+  const artisan_rank = maker?.rank || 'none';
+
+  res.json({ success: true, data: { ...rows[0], media, views360, reviews, review_count, avg_rating, artisan_rank } });
 });
 
 // GET /api/products/shop/:shop_id (extra convenience route — a shop's storefront listing)
@@ -218,6 +251,7 @@ const updateProduct = asyncHandler(async (req, res) => {
      stock_quantity, stock_quantity > 0 ? 'in_stock' : 'out_of_stock', x.enable360 ? 1 : 0, x.model_url, req.params.id]
   );
   await saveExtras(req.params.id, x);
+  await audit(req, 'product.update', { entity: 'product', entityId: req.params.id, details: { stock_quantity } });
   res.json({ success: true, message: 'Product updated' });
 });
 
@@ -239,7 +273,106 @@ const deleteProduct = asyncHandler(async (req, res) => {
     });
   }
   await pool.query('DELETE FROM Products WHERE product_id = ?', [req.params.id]);
+  await audit(req, 'product.delete', { entity: 'product', entityId: req.params.id });
   res.json({ success: true, message: 'Product deleted' });
 });
 
-module.exports = { addProduct, updateProduct, deleteProduct, addProduct, getNearbyProducts, getProductById, getProductsByShop };
+// GET /api/products/recommended?lat=&lng=&radius=25&product_id=
+// Public; personalised when a buyer is logged in. A transparent scoring
+// model (no AI call, so it is free and instant):
+//   + what the buyer bought / carted / wishlisted (category affinity)
+//   + similar pieces when shown on a product page (same category)
+//   + rating, sales and newness, - distance
+// Each result carries a `reason` the app shows ("Because you like Pottery").
+const getRecommended = asyncHandler(async (req, res) => {
+  const lat = Number(req.query.lat);
+  const lng = Number(req.query.lng);
+  const hasCoords = Number.isFinite(lat) && Number.isFinite(lng) && Math.abs(lat) <= 90 && Math.abs(lng) <= 180;
+  const radius = Math.min(Math.max(Number(req.query.radius) || 25, 1), 100);
+  const limit = Math.min(Math.max(parseInt(req.query.limit, 10) || 8, 1), 20);
+  const contextId = Number(req.query.product_id) || null;
+
+  const distanceSql = hasCoords
+    ? `(6371 * ACOS(LEAST(1, COS(RADIANS(?)) * COS(RADIANS(s.latitude)) * COS(RADIANS(s.longitude) - RADIANS(?))
+        + SIN(RADIANS(?)) * SIN(RADIANS(s.latitude)))))`
+    : 'NULL';
+  const [candidates] = await pool.query(
+    `SELECT p.product_id, p.name, p.price, p.category, p.image_url, p.stock_status, p.stock_quantity, p.created_at,
+            s.shop_id, s.shop_name, ${distanceSql} AS distance_km,
+            COALESCE(rv.avg_rating, 0) AS avg_rating, COALESCE(rv.review_count, 0) AS review_count,
+            COALESCE(sl.sold, 0) AS sold
+     FROM Products p
+     JOIN Shops s ON s.shop_id = p.shop_id
+     LEFT JOIN (SELECT product_id, AVG(rating) AS avg_rating, COUNT(*) AS review_count FROM Reviews GROUP BY product_id) rv
+       ON rv.product_id = p.product_id
+     LEFT JOIN (SELECT product_id, SUM(quantity) AS sold FROM Orders WHERE status <> 'Cancelled' GROUP BY product_id) sl
+       ON sl.product_id = p.product_id
+     WHERE p.stock_status = 'in_stock' AND p.stock_quantity > 0
+     ${hasCoords ? 'HAVING distance_km <= ?' : ''}`,
+    hasCoords ? [lat, lng, lat, radius] : []
+  );
+
+  // Category affinity from the buyer's own activity.
+  const affinity = {};
+  const exclude = new Set(contextId ? [contextId] : []);
+  if (req.user?.role === 'customer') {
+    const [signals] = await pool.query(
+      `SELECT p.product_id, p.category, 3 AS weight, 1 AS owned FROM Orders o JOIN Products p ON p.product_id = o.product_id
+         WHERE o.customer_id = ? AND o.status <> 'Cancelled'
+       UNION ALL
+       SELECT p.product_id, p.category, 2, 1 FROM CartItems c JOIN Products p ON p.product_id = c.product_id
+         WHERE c.user_id = ?
+       UNION ALL
+       SELECT p.product_id, p.category, 2, 0 FROM WishlistItems wi JOIN Wishlists w ON w.wishlist_id = wi.wishlist_id
+         JOIN Products p ON p.product_id = wi.product_id WHERE w.user_id = ?`,
+      [req.user.user_id, req.user.user_id, req.user.user_id]
+    );
+    for (const sig of signals) {
+      if (sig.category) affinity[sig.category] = (affinity[sig.category] || 0) + sig.weight;
+      if (sig.owned) exclude.add(sig.product_id); // already bought or in the cart
+    }
+  }
+  const maxAffinity = Math.max(1, ...Object.values(affinity));
+  let contextCategory = null;
+  if (contextId) {
+    const [[ctx]] = await pool.query('SELECT category FROM Products WHERE product_id = ?', [contextId]);
+    contextCategory = ctx?.category || null;
+  }
+
+  const now = Date.now();
+  const scored = candidates
+    .filter((p) => !exclude.has(p.product_id))
+    .map((p) => {
+      const aff = p.category ? (affinity[p.category] || 0) / maxAffinity : 0;
+      const similar = contextCategory && p.category === contextCategory ? 1 : 0;
+      const isNew = now - new Date(p.created_at).getTime() < 30 * 86_400_000;
+      const score =
+        3 * aff +
+        2.5 * similar +
+        0.6 * Number(p.avg_rating) +
+        0.8 * Math.log1p(Number(p.sold)) +
+        (isNew ? 0.5 : 0) -
+        (p.distance_km != null ? 0.02 * Number(p.distance_km) : 0);
+      let reason = { type: 'popular' };
+      if (similar) reason = { type: 'similar', category: p.category };
+      else if (aff > 0) reason = { type: 'because_category', category: p.category };
+      else if (Number(p.avg_rating) >= 4) reason = { type: 'top_rated' };
+      else if (!Number(p.sold) && isNew) reason = { type: 'new' };
+      return { ...p, avg_rating: Math.round(Number(p.avg_rating) * 10) / 10, score, reason };
+    })
+    .sort((a, b) => b.score - a.score || a.product_id - b.product_id)
+    .slice(0, limit)
+    .map(({ score, created_at, ...rest }) => rest);
+
+  res.json({ success: true, data: scored });
+});
+
+module.exports = {
+  addProduct,
+  updateProduct,
+  deleteProduct,
+  getNearbyProducts,
+  getProductById,
+  getProductsByShop,
+  getRecommended,
+};

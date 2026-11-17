@@ -1,0 +1,94 @@
+name: CI
+
+# Runs on every push and pull request, on any branch.
+on:
+  push:
+  pull_request:
+
+jobs:
+  backend-tests:
+    name: Backend API tests (MySQL 8.4)
+    runs-on: ubuntu-latest
+
+    services:
+      mysql:
+        # Same major version as the hosted (Railway) database. Linux MySQL
+        # treats table names as case-sensitive, which also catches casing bugs
+        # that a Windows dev machine would hide.
+        image: mysql:8.4
+        env:
+          MYSQL_ROOT_PASSWORD: root
+          MYSQL_DATABASE: artisoul_test
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd="mysqladmin ping -h 127.0.0.1 -uroot -proot"
+          --health-interval=5s
+          --health-timeout=5s
+          --health-retries=20
+
+    env:
+      DB_HOST: 127.0.0.1
+      DB_PORT: 3306
+      DB_USER: root
+      DB_PASSWORD: root
+      DB_NAME: artisoul_test
+      JWT_SECRET: ci-only-secret-not-used-anywhere-else
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: backend/package-lock.json
+
+      - name: Install dependencies
+        working-directory: backend
+        run: npm ci
+
+      - name: Load the database schema
+        run: mysql -h 127.0.0.1 -uroot -proot artisoul_test < backend/schema/artisoul_full_schema.sql
+
+      - name: Check the server boots
+        working-directory: backend
+        run: |
+          PORT=5055 node src/server.js &
+          for i in $(seq 1 20); do
+            if curl -fsS http://127.0.0.1:5055/api/health; then exit 0; fi
+            sleep 1
+          done
+          echo "Server did not start"; exit 1
+
+      - name: Run API tests
+        working-directory: backend
+        run: npm test
+
+  frontend:
+    name: Frontend lint and build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install dependencies
+        working-directory: frontend
+        run: npm ci
+
+      - name: Lint
+        working-directory: frontend
+        run: npm run lint
+
+      - name: Translations complete (English, Hindi, Marathi)
+        working-directory: frontend
+        run: npm run check:i18n
+
+      - name: Build
+        working-directory: frontend
+        run: npm run build

@@ -44,6 +44,8 @@ export function AuthProvider({ children }) {
       user: session?.user ?? null,
       token: session?.token ?? null,
       isArtisan: session?.user?.role === 'artisan',
+      isCustomer: session?.user?.role === 'customer',
+      isAdmin: session?.user?.role === 'admin',
       login,
       register,
       logout,
