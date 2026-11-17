@@ -19,14 +19,22 @@ npm install --prefix frontend --no-audit --no-fund
 
 # 2. Log in
 Step 'Checking Cloudflare login'
-npx wrangler whoami *> $null
-if ($LASTEXITCODE -ne 0) { npx wrangler login }
+# `wrangler whoami` exits 0 even when logged out, so check what it says.
+function LoggedIn { (cmd /c "npx wrangler whoami 2>&1" | Out-String) -match 'You are logged in' }
+if (-not (LoggedIn)) {
+  Write-Host 'Not logged in - a browser window will open. Log in and click "Allow".'
+  cmd /c "npx wrangler login"
+  if (-not (LoggedIn)) { throw 'Cloudflare login did not complete. Run "npx wrangler login" yourself, then re-run this script.' }
+}
+Write-Host 'Logged in.'
 
 # 3. R2 bucket for uploads
 Step 'Creating R2 bucket "artisoul-uploads" (if missing)'
-$buckets = npx wrangler r2 bucket list 2>&1 | Out-String
+$buckets = cmd /c "npx wrangler r2 bucket list 2>&1" | Out-String
+if ($LASTEXITCODE -ne 0) { Write-Host $buckets; throw 'Could not list R2 buckets (see above).' }
 if ($buckets -notmatch 'artisoul-uploads') {
-  npx wrangler r2 bucket create artisoul-uploads
+  cmd /c "npx wrangler r2 bucket create artisoul-uploads"
+  if ($LASTEXITCODE -ne 0) { throw 'Could not create the R2 bucket (see above). If R2 is not enabled yet, enable it in the Cloudflare dashboard (R2 Object Storage) and re-run.' }
 } else { Write-Host 'Already exists.' }
 
 # 4. Hyperdrive -> your hosted MySQL
@@ -35,7 +43,7 @@ if ((Get-Content $config -Raw) -match 'REPLACE_WITH_HYPERDRIVE_ID') {
   Write-Host 'Enter your HOSTED MySQL connection string (must be reachable from the internet),'
   Write-Host 'e.g. mysql://user:password@host:3306/artisoul'
   $conn = Read-Host 'Connection string'
-  $out = npx wrangler hyperdrive create artisoul-db --connection-string="$conn" 2>&1 | Out-String
+  $out = cmd /c "npx wrangler hyperdrive create artisoul-db --connection-string=`"$conn`" 2>&1" | Out-String
   Write-Host $out
   if ($out -notmatch '([0-9a-f]{32})') { throw 'Could not read the Hyperdrive id from the output above.' }
   $id = $Matches[1]

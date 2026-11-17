@@ -27,6 +27,7 @@
     "cf:dev": "wrangler dev",
     "cf:deploy": "wrangler deploy",
     "cf:upload-existing": "powershell -ExecutionPolicy Bypass -File scripts/cloudflare/upload-existing-files.ps1",
-    "cf:logs": "wrangler tail"
+    "cf:logs": "wrangler tail",
+    "railway:import": "powershell -ExecutionPolicy Bypass -File scripts/railway/import-to-railway.ps1"
   }
 }
