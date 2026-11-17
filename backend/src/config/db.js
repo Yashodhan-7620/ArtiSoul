@@ -24,7 +24,9 @@ if (isWorker) {
         port: hd.port,
         disableEval: true, // Workers forbid eval / new Function
         decimalNumbers: true,
+        timezone: 'Z',
       });
+      await conn.query("SET time_zone = '+00:00'");
       try {
         return await conn.query(sql, values);
       } finally {
@@ -45,7 +47,12 @@ if (isWorker) {
     connectionLimit: 10,
     queueLimit: 0,
     decimalNumbers: true, // return DECIMAL columns (lat/lng/price) as JS numbers, not strings
+    // All dates travel as UTC. Hosted MySQL (Railway) runs in UTC while this
+    // laptop runs in IST; without this every timestamp read back 5.5 h early.
+    timezone: 'Z',
   });
+  // Pin each new session to UTC too, whatever the server's own zone is.
+  pool.pool.on('connection', (conn) => conn.query("SET time_zone = '+00:00'"));
 }
 
 // Quick startup check so a bad .env fails loudly instead of on the first request.

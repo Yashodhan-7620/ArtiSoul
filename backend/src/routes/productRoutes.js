@@ -7,11 +7,13 @@ const {
   getNearbyProducts,
   getProductById,
   getProductsByShop,
+  getRecommended,
 } = require('../controllers/productController');
-const { verifyToken, requireRole } = require('../middleware/auth');
+const { verifyToken, optionalAuth, requireRole } = require('../middleware/auth');
 
 // Order matters: specific paths before the '/:id' catch-all.
-router.get('/nearby', getNearbyProducts);              // public â€” killer feature
+router.get('/nearby', getNearbyProducts);              // public
+router.get('/recommended', optionalAuth, getRecommended);  // personalised when logged in
 router.get('/shop/:shop_id', getProductsByShop);        // extra convenience
 router.get('/:id', getProductById);                     // extra convenience
 router.post('/add', verifyToken, requireRole('artisan'), addProduct);

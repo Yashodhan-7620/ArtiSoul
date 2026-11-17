@@ -10,16 +10,17 @@ import { CATEGORIES, formatPrice } from '../lib/format';
 import { useAuth } from '../context/AuthContext';
 import { useToast } from '../components/Toast';
 import { Container } from '../components/AppShell';
+import { useT } from '../i18n';
 
 const MAX_BYTES = 5 * 1024 * 1024;
 const MAX_MEDIA = 8;
 const VIEW_ANGLES = [
-  { id: 'front', label: 'Front', required: true },
-  { id: 'right', label: 'Right side', required: true },
-  { id: 'back', label: 'Back', required: true },
-  { id: 'left', label: 'Left side', required: true },
-  { id: 'top', label: 'Top', required: false },
-  { id: 'bottom', label: 'Bottom', required: false },
+  { id: 'front', required: true },
+  { id: 'right', required: true },
+  { id: 'back', required: true },
+  { id: 'left', required: true },
+  { id: 'top', required: false },
+  { id: 'bottom', required: false },
 ];
 const MAX_VIDEO_BYTES = 30 * 1024 * 1024;
 
@@ -29,7 +30,11 @@ export default function AddProduct() {
   const { id: editId } = useParams();
   const editing = Boolean(editId);
   const toast = useToast();
+  const { t, tc, lang } = useT();
   const fileRef = useRef(null);
+  const [aiEnabled, setAiEnabled] = useState(false);
+  const [aiBusy, setAiBusy] = useState(false);
+  const [aiNote, setAiNote] = useState('');
   const [existingMedia, setExistingMedia] = useState([]);
   const [existingViews, setExistingViews] = useState({});
   const [existingModel, setExistingModel] = useState(null);
@@ -71,6 +76,41 @@ export default function AddProduct() {
       .finally(() => setShopsLoading(false));
   }, [token]);
 
+  // Show the AI button only when the server has an AI key configured.
+  useEffect(() => {
+    api.ai
+      .status(token)
+      .then(({ data }) => setAiEnabled(data.enabled))
+      .catch(() => setAiEnabled(false));
+  }, [token]);
+
+  // AI-assisted listing: Claude suggests a name, description, category and
+  // price from the photo. Fields the artisan already filled are kept unless
+  // they agree to replace them.
+  async function suggestWithAi() {
+    if (!file) return toast.error(t('ai.need_photo'));
+    const filled = form.name.trim() || form.description.trim() || form.price !== '';
+    if (filled && !window.confirm(t('ai.replace_confirm'))) return;
+    setAiBusy(true);
+    setAiNote('');
+    try {
+      const { data } = await api.ai.listing(file, lang, token);
+      setForm((f) => ({
+        ...f,
+        name: data.name || f.name,
+        description: data.description || f.description,
+        category: data.category || f.category,
+        price: data.price ? String(data.price) : f.price,
+      }));
+      setAiNote(data.price_note);
+      toast.success(t('ai.done'));
+    } catch (err) {
+      toast.error(err.message);
+    } finally {
+      setAiBusy(false);
+    }
+  }
+
   useEffect(() => {
     if (!editId) return;
     api.products
@@ -108,11 +148,11 @@ export default function AddProduct() {
   function handleFile(picked) {
     if (!picked) return;
     if (!picked.type.startsWith('image/')) {
-      toast.error('That file is not an image');
+      toast.error(t('add.not_image'));
       return;
     }
     if (picked.size > MAX_BYTES) {
-      toast.error('Image must be under 5 MB');
+      toast.error(t('add.too_big'));
       return;
     }
     setFile(picked);
@@ -130,15 +170,15 @@ export default function AddProduct() {
     for (const f of Array.from(fileList || [])) {
       const isVideo = f.type.startsWith('video/');
       if (!isVideo && !f.type.startsWith('image/')) {
-        toast.error(`${f.name} is not an image or video`);
+        toast.error(t('add.not_media', { name: f.name }));
         continue;
       }
       if (f.size > (isVideo ? MAX_VIDEO_BYTES : MAX_BYTES)) {
-        toast.error(`${f.name} is too large (${isVideo ? '30' : '5'} MB max)`);
+        toast.error(t('add.file_too_big', { name: f.name, mb: isVideo ? 30 : 5 }));
         continue;
       }
       if (next.length + existingMedia.length >= MAX_MEDIA) {
-        toast.error(`Up to ${MAX_MEDIA} extra files`);
+        toast.error(t('add.max_media', { max: MAX_MEDIA }));
         break;
       }
       next.push(f);
@@ -149,8 +189,8 @@ export default function AddProduct() {
 
   function handleView(angle, picked) {
     if (!picked) return;
-    if (!picked.type.startsWith('image/')) return toast.error('That file is not an image');
-    if (picked.size > MAX_BYTES) return toast.error('Image must be under 5 MB');
+    if (!picked.type.startsWith('image/')) return toast.error(t('add.not_image'));
+    if (picked.size > MAX_BYTES) return toast.error(t('add.too_big'));
     setViews((v) => ({ ...v, [angle]: picked }));
   }
 
@@ -158,16 +198,16 @@ export default function AddProduct() {
     e.preventDefault();
     setError('');
 
-    if (!form.shop_id) return setError('Pick which shop this belongs to');
-    if (!form.name.trim()) return setError('Give the piece a name');
+    if (!form.shop_id) return setError(t('add.need_shop'));
+    if (!form.name.trim()) return setError(t('add.need_name'));
     const price = Number(form.price);
-    if (!Number.isFinite(price) || price < 0) return setError('Enter a valid price');
+    if (!Number.isFinite(price) || price < 0) return setError(t('add.bad_price'));
     const stock_quantity = Number(form.stock_quantity);
     if (!Number.isInteger(stock_quantity) || stock_quantity < 0) {
-      return setError('Quantity must be a whole number, 0 or more');
+      return setError(t('add.bad_qty'));
     }
     if (enable360 && !VIEW_ANGLES.filter((a) => a.required).every((a) => views[a.id] || existingViews[a.id])) {
-      return setError('360° view needs the front, right, back and left photos');
+      return setError(t('add.need_360'));
     }
 
     try {
@@ -226,7 +266,7 @@ export default function AddProduct() {
       if (editing) await api.products.update(editId, payload, token);
       else await api.products.add(payload, token);
 
-      toast.success(editing ? `"${form.name.trim()}" updated` : `"${form.name.trim()}" is now listed`);
+      toast.success(editing ? t('add.updated', { name: form.name.trim() }) : t('add.listed', { name: form.name.trim() }));
       navigate('/artisan', { replace: true });
     } catch (err) {
       setError(err.message);
@@ -238,7 +278,7 @@ export default function AddProduct() {
   if (shopsLoading) {
     return (
       <div className="flex min-h-0 flex-1 flex-col">
-        <TopBar title="List a piece" />
+        <TopBar title={t('add.title')} />
         <div className="flex-1 space-y-4 p-5">
           <div className="skeleton aspect-[4/3] w-full rounded-3xl" />
           <div className="skeleton h-12 w-full rounded-2xl" />
@@ -253,12 +293,12 @@ export default function AddProduct() {
   if (shops.length === 0) {
     return (
       <div className="flex min-h-0 flex-1 flex-col">
-        <TopBar title="List a piece" />
+        <TopBar title={t('add.title')} />
         <EmptyState
           icon="store"
-          title="You need a shop first"
-          message="Products live inside a shop, and the shop is what gives them a place on the map."
-          action={<Button onClick={() => navigate('/artisan/shop')}>Open my shop</Button>}
+          title={t('add.need_shop_title')}
+          message={t('add.need_shop_body')}
+          action={<Button onClick={() => navigate('/artisan/shop')}>{t('dash.open_shop')}</Button>}
         />
       </div>
     );
@@ -266,7 +306,7 @@ export default function AddProduct() {
 
   return (
     <div className="flex min-h-0 flex-1 flex-col">
-      <TopBar title={editing ? 'Edit listing' : 'List a piece'} subtitle={editing ? 'Update details and stock' : 'A photo and a price is enough'} />
+      <TopBar title={editing ? t('add.edit_title') : t('add.title')} subtitle={editing ? t('add.edit_subtitle') : t('add.subtitle')} />
 
       <form
         onSubmit={handleSubmit}
@@ -276,7 +316,7 @@ export default function AddProduct() {
         {/* ---------- Photo ---------- */}
         <div>
           <div className="mb-1.5 flex items-center justify-between">
-            <span className="field-label !mb-0">Photo</span>
+            <span className="field-label !mb-0">{t('add.photo')}</span>
             <button
               type="button"
               onClick={() => {
@@ -285,7 +325,7 @@ export default function AddProduct() {
               }}
               className="text-[12.5px] font-semibold text-clay-600 underline-offset-4 hover:underline"
             >
-              {useUrl ? 'Upload a file instead' : 'Paste a link instead'}
+              {useUrl ? t('add.upload_instead') : t('add.link_instead')}
             </button>
           </div>
 
@@ -320,12 +360,12 @@ export default function AddProduct() {
                     onClick={() => fileRef.current?.click()}
                     className="rounded-full bg-cream-100/90 px-3 py-1.5 text-[12px] font-semibold text-ink-800 active:scale-95"
                   >
-                    Replace
+                    {t('add.replace')}
                   </button>
                   <button
                     type="button"
                     onClick={clearPhoto}
-                    aria-label="Remove photo"
+                    aria-label={t('common.remove')}
                     className="grid h-[30px] w-[30px] place-items-center rounded-full bg-cream-100/90 text-clay-700 active:scale-95"
                   >
                     <Icon name="trash" className="h-3.5 w-3.5" strokeWidth={2} />
@@ -350,8 +390,8 @@ export default function AddProduct() {
                 <span className="grid h-12 w-12 place-items-center rounded-2xl bg-cream-200 text-clay-500">
                   <Icon name="camera" className="h-5 w-5" />
                 </span>
-                <span className="text-[14px] font-semibold text-ink-600">Add a photo</span>
-                <span className="text-[12px] text-ink-400">JPG, PNG or WEBP · up to 5 MB</span>
+                <span className="text-[14px] font-semibold text-ink-600">{t('add.add_photo')}</span>
+                <span className="text-[12px] text-ink-400">{t('add.photo_hint')}</span>
               </span>
             </button>
           )}
@@ -364,16 +404,30 @@ export default function AddProduct() {
             className="hidden"
             onChange={(e) => handleFile(e.target.files?.[0])}
           />
+
+          {aiEnabled && !useUrl && (
+            <div className="mt-3 rounded-2xl border border-clay-200 bg-clay-50 p-3">
+              <div className="flex items-center gap-3">
+                <Icon name="sparkle" className="h-5 w-5 shrink-0 text-clay-500" />
+                <p className="min-w-0 flex-1 text-[12.5px] leading-snug text-ink-600">
+                  {file ? t('ai.hint_ready') : t('ai.hint_photo')}
+                </p>
+                <Button type="button" size="sm" onClick={suggestWithAi} loading={aiBusy} disabled={!file}>
+                  {t('ai.button')}
+                </Button>
+              </div>
+              {aiNote && <p className="mt-2 text-[12px] text-ink-500">{t('ai.price_note', { note: aiNote })}</p>}
+              <p className="mt-1.5 text-[11px] text-ink-400">{t('ai.check')}</p>
+            </div>
+          )}
         </div>
 
         <div className="space-y-3 rounded-3xl border border-cream-300 bg-white p-4">
           <label className="flex cursor-pointer items-start gap-3">
             <input type="checkbox" checked={enable360} onChange={(e) => setEnable360(e.target.checked)} className="mt-1" />
             <span>
-              <span className="block text-[14.5px] font-semibold text-ink-800">Enable 360° view</span>
-              <span className="block text-[12.5px] text-ink-500">
-                Customers can drag to rotate the product. Photograph it from each side.
-              </span>
+              <span className="block text-[14.5px] font-semibold text-ink-800">{t('add.enable_360')}</span>
+              <span className="block text-[12.5px] text-ink-500">{t('add.enable_360_hint')}</span>
             </span>
           </label>
           {enable360 && (
@@ -382,17 +436,17 @@ export default function AddProduct() {
                 <label key={a.id} className="block cursor-pointer text-center">
                   <span className="relative grid aspect-square place-items-center overflow-hidden rounded-2xl border-2 border-dashed border-cream-300 bg-cream-100 text-[12px] text-ink-400">
                     {views[a.id] ? (
-                      <img src={URL.createObjectURL(views[a.id])} alt={a.label} className="h-full w-full object-cover" />
+                      <img src={URL.createObjectURL(views[a.id])} alt={t(`add.angle.${a.id}`)} className="h-full w-full object-cover" />
                     ) : existingViews[a.id] ? (
-                      <img src={existingViews[a.id]} alt={a.label} className="h-full w-full object-cover" />
+                      <img src={existingViews[a.id]} alt={t(`add.angle.${a.id}`)} className="h-full w-full object-cover" />
                     ) : (
-                      '+ Add photo'
+                      t('add.plus_photo')
                     )}
                     <input type="file" accept="image/jpeg,image/png,image/webp" className="hidden"
                       onChange={(e) => handleView(a.id, e.target.files?.[0])} />
                   </span>
                   <span className="mt-1 block text-[12.5px] font-semibold text-ink-700">
-                    {a.label}{a.required ? ' *' : ' (optional)'}
+                    {t(`add.angle.${a.id}`)}{a.required ? ' *' : ` (${t('common.optional')})`}
                   </span>
                 </label>
               ))}
@@ -400,22 +454,22 @@ export default function AddProduct() {
           )}
         </div>
 
-        <Field label="3D model (.glb)" id="glb" hint="Optional — customers can rotate and zoom it. Max 30 MB.">
+        <Field label={t('add.model')} id="glb" hint={t('add.model_hint')}>
           <div className="flex items-center gap-2">
             <label className="cursor-pointer rounded-full border border-dashed border-cream-300 px-3 py-1.5 text-[12px] font-semibold text-clay-600">
-              {glb ? 'Replace file' : '+ Add .glb file'}
+              {glb ? t('add.replace_file') : t('add.add_glb')}
               <input id="glb" type="file" accept=".glb,model/gltf-binary" className="hidden"
                 onChange={(e) => {
                   const f = e.target.files?.[0];
                   if (!f) return;
-                  if (!f.name.toLowerCase().endsWith('.glb')) return toast.error('Please choose a .glb file');
-                  if (f.size > MAX_VIDEO_BYTES) return toast.error('Model must be under 30 MB');
+                  if (!f.name.toLowerCase().endsWith('.glb')) return toast.error(t('add.need_glb'));
+                  if (f.size > MAX_VIDEO_BYTES) return toast.error(t('add.model_too_big'));
                   setGlb(f);
                 }} />
             </label>
             {existingModel && !glb && (
               <span className="inline-flex items-center gap-1.5 text-[12px] text-ink-700">
-                <span>Current model attached</span>
+                <span>{t('add.model_attached')}</span>
                 <button type="button" aria-label="Remove model" onClick={() => setExistingModel(null)}>×</button>
               </span>
             )}
@@ -428,11 +482,11 @@ export default function AddProduct() {
           </div>
         </Field>
 
-        <Field label="Preview gallery" id="extras" hint={`Optional — more photos or a short video (MP4/WEBM, up to 30 MB). ${extras.length}/${MAX_MEDIA} added`}>
+        <Field label={t('add.gallery')} id="extras" hint={t('add.gallery_hint', { n: extras.length, max: MAX_MEDIA })}>
           <div className="flex flex-wrap gap-2">
             {existingMedia.map((m, i) => (
               <span key={m.url} className="inline-flex items-center gap-1.5 rounded-full bg-cream-200 px-3 py-1.5 text-[12px] font-medium text-ink-700">
-                {m.media_type === 'video' ? '🎬' : '🖼️'} Saved {m.media_type}
+                {m.media_type === 'video' ? '🎬' : '🖼️'} {t(m.media_type === 'video' ? 'add.saved_video' : 'add.saved_image')}
                 <button type="button" aria-label="Remove saved file" onClick={() => setExistingMedia((l) => l.filter((_, j) => j !== i))}>×</button>
               </span>
             ))}
@@ -444,7 +498,7 @@ export default function AddProduct() {
             ))}
             <button type="button" onClick={() => extraRef.current?.click()}
               className="rounded-full border border-dashed border-cream-300 px-3 py-1.5 text-[12px] font-semibold text-clay-600">
-              + Add
+              + {t('common.add')}
             </button>
           </div>
           <input ref={extraRef} id="extras" type="file" multiple className="hidden"
@@ -454,7 +508,7 @@ export default function AddProduct() {
 
         {/* ---------- Details ---------- */}
         {shops.length > 1 && !editing && (
-          <Field label="Shop" id="shop_id">
+          <Field label={t('add.shop')} id="shop_id">
             <select id="shop_id" className="field-input" value={form.shop_id} onChange={set('shop_id')}>
               {shops.map((s) => (
                 <option key={s.shop_id} value={s.shop_id}>
@@ -465,20 +519,20 @@ export default function AddProduct() {
           </Field>
         )}
 
-        <Field label="Name" id="name">
+        <Field label={t('add.name')} id="name">
           <Input id="name" placeholder="Handwoven cotton saree" value={form.name} onChange={set('name')} />
         </Field>
 
         <Field
-          label="Price"
+          label={t('add.price')}
           id="price"
-          hint={form.price !== '' && Number(form.price) >= 0 ? `Shown as ${formatPrice(form.price)}` : 'In rupees'}
+          hint={form.price !== '' && Number(form.price) >= 0 ? t('add.shown_as', { price: formatPrice(form.price) }) : t('add.in_rupees')}
         >
           <Input id="price" inputMode="decimal" placeholder="2499" value={form.price} onChange={set('price')} />
         </Field>
 
         <div>
-          <Field label="Category" id="category" hint="Tap a suggestion, or type your own">
+          <Field label={t('add.category')} id="category" hint={t('add.category_hint')}>
             <Input id="category" placeholder="Textiles" value={form.category} onChange={set('category')} />
           </Field>
           {/* Chips sit outside <Field> so the hint stays directly under the input. */}
@@ -494,13 +548,13 @@ export default function AddProduct() {
                     : 'border-cream-300 bg-white text-ink-500 hover:border-clay-300'
                 }`}
               >
-                {c}
+                {tc(c)}
               </button>
             ))}
           </div>
         </div>
 
-        <Field label="Description" id="description" hint="Optional — materials, size, how long it took">
+        <Field label={t('add.description')} id="description" hint={t('add.description_hint')}>
           <TextArea
             id="description"
             rows={3}
@@ -510,7 +564,7 @@ export default function AddProduct() {
           />
         </Field>
 
-        <Field label="Quantity in stock" id="stock_quantity" hint="How many units are available. Set 0 to mark it sold out.">
+        <Field label={t('add.quantity')} id="stock_quantity" hint={t('add.quantity_hint')}>
           <Input
             id="stock_quantity"
             type="number"
@@ -530,7 +584,7 @@ export default function AddProduct() {
         )}
 
           <Button type="submit" size="lg" loading={!!stage} className="w-full">
-          {stage === 'uploading' ? 'Uploading files…' : stage === 'saving' ? 'Saving…' : editing ? 'Save changes' : 'Publish listing'}
+          {stage === 'uploading' ? t('add.uploading') : stage === 'saving' ? t('add.saving') : editing ? t('add.save') : t('add.publish')}
           </Button>
         </Container>
       </form>

@@ -4,9 +4,18 @@ import AppShell from './components/AppShell';
 import ProtectedRoute from './components/ProtectedRoute';
 import { ToastProvider } from './components/Toast';
 import { AuthProvider } from './context/AuthContext';
+import { BadgesProvider } from './context/BadgesContext';
+import { LanguageProvider } from './i18n';
 
 import Account from './pages/Account';
 import AddProduct from './pages/AddProduct';
+import Admin from './pages/Admin';
+import Cart from './pages/Cart';
+import Events from './pages/Events';
+import HowItWorks from './pages/HowItWorks';
+import Notifications from './pages/Notifications';
+import Sales from './pages/Sales';
+import Wishlist from './pages/Wishlist';
 import Checkout from './pages/Checkout';
 import CreateShop from './pages/CreateShop';
 import Dashboard from './pages/Dashboard';
@@ -38,12 +47,54 @@ function Shell() {
         <Route path="/product/:id" element={<ProductDetail />} />
         <Route path="/checkout/:id" element={<Checkout />} />
         <Route path="/account" element={<Account />} />
+        <Route path="/events" element={<Events />} />
+        <Route path="/how-it-works" element={<HowItWorks />} />
 
         <Route
           path="/purchases"
           element={
             <ProtectedRoute role="customer">
               <Purchases />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/cart"
+          element={
+            <ProtectedRoute role="customer">
+              <Cart />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/wishlist"
+          element={
+            <ProtectedRoute role="customer">
+              <Wishlist />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/notifications"
+          element={
+            <ProtectedRoute>
+              <Notifications />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/admin"
+          element={
+            <ProtectedRoute role="admin">
+              <Admin />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/artisan/sales"
+          element={
+            <ProtectedRoute role="artisan">
+              <Sales />
             </ProtectedRoute>
           }
         />
@@ -90,11 +141,15 @@ function Shell() {
 export default function App() {
   return (
     <BrowserRouter>
-      <AuthProvider>
-        <ToastProvider>
-          <Shell />
-        </ToastProvider>
-      </AuthProvider>
+      <LanguageProvider>
+        <AuthProvider>
+          <BadgesProvider>
+            <ToastProvider>
+              <Shell />
+            </ToastProvider>
+          </BadgesProvider>
+        </AuthProvider>
+      </LanguageProvider>
     </BrowserRouter>
   );
 }

@@ -1,17 +1,21 @@
 import { Link, NavLink } from 'react-router-dom';
 import Icon from './Icon';
-import { NAV_ITEMS } from './navItems';
+import { navItemsFor } from './navItems';
 import { initials } from '../lib/format';
 import { useAuth } from '../context/AuthContext';
+import { useBadges } from '../context/BadgesContext';
+import { useT } from '../i18n';
+import { Badge } from './BottomNav';
+import LanguageSwitcher from './LanguageSwitcher';
 
 // Desktop navigation. Appears only at lg and up; below that a 248px rail
 // would squeeze the content column more than it helps, so BottomNav takes over.
 export default function SideNav() {
-  const { user, isArtisan } = useAuth();
-  const isCustomer = Boolean(user) && !isArtisan;
-  const items = NAV_ITEMS.filter(
-    (i) => (!i.artisanOnly || isArtisan) && (!i.customerOnly || isCustomer)
-  );
+  const { user } = useAuth();
+  const { unread, cartCount } = useBadges();
+  const { t } = useT();
+  const counts = { unread, cart: cartCount };
+  const items = navItemsFor(user);
 
   return (
     <aside className="hidden w-[264px] shrink-0 flex-col border-r border-cream-300 bg-cream-50/60 px-4 py-6 lg:flex">
@@ -24,7 +28,7 @@ export default function SideNav() {
 
       <nav className="flex-1">
         <ul className="space-y-1">
-          {items.map(({ to, icon, label, desktopLabel }) => (
+          {items.map(({ to, icon, label, desktopLabel, badge }) => (
             <li key={to}>
               <NavLink
                 to={to}
@@ -41,7 +45,8 @@ export default function SideNav() {
                 {({ isActive }) => (
                   <>
                     <Icon name={icon} strokeWidth={isActive ? 2 : 1.75} />
-                    {desktopLabel || label}
+                    <span className="flex-1">{t(desktopLabel || label)}</span>
+                    <Badge count={badge ? counts[badge] : 0} />
                   </>
                 )}
               </NavLink>
@@ -49,6 +54,8 @@ export default function SideNav() {
           ))}
         </ul>
       </nav>
+
+      <LanguageSwitcher compact className="mb-1 self-start px-2" />
 
       {user ? (
         <Link
@@ -61,7 +68,7 @@ export default function SideNav() {
           </span>
           <span className="min-w-0 flex-1">
             <span className="block truncate text-[13.5px] font-semibold text-ink-800">{user.name}</span>
-            <span className="block text-[11.5px] capitalize text-ink-400">{user.role}</span>
+            <span className="block text-[11.5px] text-ink-400">{t(`role.${user.role}`)}</span>
           </span>
         </Link>
       ) : (
@@ -70,7 +77,7 @@ export default function SideNav() {
           className="mt-4 flex items-center justify-center gap-2 rounded-2xl bg-clay-500 px-4 py-3
                      text-[14px] font-semibold text-white transition hover:bg-clay-600"
         >
-          Log in
+          {t('auth.login')}
         </Link>
       )}
     </aside>

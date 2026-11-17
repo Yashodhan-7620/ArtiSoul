@@ -68,6 +68,9 @@ export const api = {
   shops: {
     create: (body, token) => request('/api/shops/create', { method: 'POST', body, token }),
     mine: (token) => request('/api/shops/mine', { token }),
+    // Shop details are final; a shop without a picture may add one, once.
+    setImage: (shopId, image_url, token) =>
+      request(`/api/shops/${shopId}/image`, { method: 'POST', body: { image_url }, token }),
   },
 
   products: {
@@ -81,6 +84,16 @@ export const api = {
     update: (id, body, token) => request(`/api/products/${id}`, { method: 'PUT', body, token }),
     remove: (id, token) => request(`/api/products/${id}`, { method: 'DELETE', token }),
     byShop: (shopId) => request(`/api/products/shop/${shopId}`),
+    recommended: ({ lat, lng, productId, limit } = {}, token) => {
+      const qs = new URLSearchParams();
+      if (Number.isFinite(lat) && Number.isFinite(lng)) {
+        qs.set('lat', lat);
+        qs.set('lng', lng);
+      }
+      if (productId) qs.set('product_id', productId);
+      if (limit) qs.set('limit', limit);
+      return request(`/api/products/recommended?${qs}`, { token });
+    },
   },
 
   uploads: {
@@ -110,6 +123,12 @@ export const api = {
     mine: (token) => request('/api/orders/mine', { token }),
 
     checkout: (body, token) => request('/api/orders/checkout', { method: 'POST', body, token }),
+    checkoutCart: (body, token) => request('/api/orders/checkout-cart', { method: 'POST', body, token }),
+    timeline: (orderId, token) => request(`/api/orders/${orderId}/timeline`, { token }),
+    scheduleLive: (orderId, scheduled_at, token) =>
+      request(`/api/orders/${orderId}/live-schedule`, { method: 'PATCH', body: { scheduled_at }, token }),
+    sales: (token) => request('/api/orders/sales', { token }),
+    confirmCod: (orderId, token) => request(`/api/orders/${orderId}/cod-confirm`, { method: 'POST', token }),
     verifyPayment: (body, token) =>
       request('/api/orders/verify-payment', { method: 'POST', body, token }),
 
@@ -136,6 +155,66 @@ export const api = {
       request(`/api/streams/${orderId}/answer`, { method: 'POST', body: { answer, version }, token }),
     rejoin: (orderId, token) => request(`/api/streams/${orderId}/rejoin`, { method: 'POST', token }),
     end: (orderId, token) => request(`/api/streams/${orderId}/end`, { method: 'POST', token }),
+  },
+
+  cart: {
+    get: (token) => request('/api/cart', { token }),
+    add: (product_id, quantity, token) => request('/api/cart', { method: 'POST', body: { product_id, quantity }, token }),
+    update: (productId, quantity, token) =>
+      request(`/api/cart/${productId}`, { method: 'PUT', body: { quantity }, token }),
+    remove: (productId, token) => request(`/api/cart/${productId}`, { method: 'DELETE', token }),
+  },
+
+  wishlists: {
+    list: (token) => request('/api/wishlists', { token }),
+    create: (name, token) => request('/api/wishlists', { method: 'POST', body: { name }, token }),
+    rename: (id, name, token) => request(`/api/wishlists/${id}`, { method: 'PATCH', body: { name }, token }),
+    remove: (id, token) => request(`/api/wishlists/${id}`, { method: 'DELETE', token }),
+    addItem: (id, product_id, token) =>
+      request(`/api/wishlists/${id}/items`, { method: 'POST', body: { product_id }, token }),
+    removeItem: (id, productId, token) =>
+      request(`/api/wishlists/${id}/items/${productId}`, { method: 'DELETE', token }),
+  },
+
+  notifications: {
+    list: (token) => request('/api/notifications', { token }),
+    unreadCount: (token) => request('/api/notifications/unread-count', { token }),
+    markRead: (ids, token) => request('/api/notifications/read', { method: 'POST', body: { ids }, token }),
+  },
+
+  ai: {
+    status: (token) => request('/api/ai/status', { token }),
+    listing: (file, lang, token) => {
+      const form = new FormData();
+      form.append('image', file);
+      form.append('lang', lang);
+      return request('/api/ai/listing', { method: 'POST', body: form, token, form: true });
+    },
+  },
+
+  events: {
+    venues: () => request('/api/events/venues'),
+    list: (token) => request('/api/events', { token }),
+    create: (body, token) => request('/api/events', { method: 'POST', body, token }),
+    respond: (id, body, token) => request(`/api/events/${id}/respond`, { method: 'POST', body, token }),
+    approve: (id, note, token) => request(`/api/events/${id}/approve`, { method: 'POST', body: { note }, token }),
+    reject: (id, note, token) => request(`/api/events/${id}/reject`, { method: 'POST', body: { note }, token }),
+  },
+
+  ranks: {
+    list: () => request('/api/ranks'),
+    mine: (token) => request('/api/ranks/me', { token }),
+  },
+
+  admin: {
+    overview: (token) => request('/api/admin/overview', { token }),
+    activity: (params, token) => request(`/api/admin/activity?${new URLSearchParams(params)}`, { token }),
+    users: (params, token) => request(`/api/admin/users?${new URLSearchParams(params)}`, { token }),
+    setUserStatus: (id, active, reason, token) =>
+      request(`/api/admin/users/${id}/status`, { method: 'PATCH', body: { active, reason }, token }),
+    orders: (params, token) => request(`/api/admin/orders?${new URLSearchParams(params)}`, { token }),
+    reviews: (token) => request('/api/admin/reviews', { token }),
+    removeReview: (id, reason, token) => request(`/api/admin/reviews/${id}`, { method: 'DELETE', body: { reason }, token }),
   },
 
   chat: {

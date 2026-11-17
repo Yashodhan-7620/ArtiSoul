@@ -1,15 +1,17 @@
 import { Link } from 'react-router-dom';
 import Icon from './Icon';
+import { useT } from '../i18n';
 
 const POINTS = [
-  { icon: 'pin', text: 'Sorted by how close it is to you' },
-  { icon: 'store', text: 'Every shop is run by one person' },
-  { icon: 'camera', text: 'A piece goes live in under a minute' },
+  { icon: 'pin', key: 'near' },
+  { icon: 'store', key: 'maker' },
+  { icon: 'camera', key: 'quick' },
 ];
 
 // Auth screens: a single centred column on a phone; on a laptop the brand
 // panel fills the space the form doesn't need instead of leaving it empty.
 export default function AuthLayout({ children }) {
+  const { t } = useT();
   return (
     <div className="flex h-full min-h-0 flex-1 lg:grid lg:grid-cols-2">
       {/* Brand panel — desktop only */}
@@ -33,23 +35,23 @@ export default function AuthLayout({ children }) {
 
         <div className="relative">
           <h2 className="font-display text-[40px] font-semibold leading-[1.08] tracking-tight">
-            The craft
+            {t('welcome.h1_a')}
             <br />
-            around <span className="text-clay-300">the corner.</span>
+            {t('welcome.h1_b')} <span className="text-clay-300">{t('welcome.h1_c')}</span>
           </h2>
           <ul className="mt-8 space-y-3.5">
-            {POINTS.map(({ icon, text }) => (
+            {POINTS.map(({ icon, key }) => (
               <li key={icon} className="flex items-center gap-3 text-[14.5px] text-cream-200/80">
                 <span className="grid h-8 w-8 shrink-0 place-items-center rounded-xl bg-cream-100/10 text-clay-300">
                   <Icon name={icon} className="h-4 w-4" strokeWidth={2} />
                 </span>
-                {text}
+                {t(`welcome.f.${key}.title`)}
               </li>
             ))}
           </ul>
         </div>
 
-        <p className="relative text-[12.5px] text-cream-200/45">ArtiSoul · Phase 3 · MVP</p>
+        <p className="relative text-[12.5px] text-cream-200/45">ArtiSoul</p>
       </aside>
 
       {/* Form column */}

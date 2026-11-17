@@ -1,14 +1,24 @@
 const express = require('express');
 const router = express.Router();
 const { verifyToken, requireRole } = require('../middleware/auth');
-const { checkout, verifyPayment } = require('../controllers/checkoutController');
+const { checkout, checkoutCart, verifyPayment } = require('../controllers/checkoutController');
 const { createReview } = require('../controllers/reviewController');
-const { createOrder, getMyOrders, getShopOrders, updateOrderStatus } = require('../controllers/ordersController');
+const {
+  createOrder,
+  getMyOrders,
+  getShopOrders,
+  updateOrderStatus,
+  scheduleLive,
+  confirmCodPayment,
+  getTimeline,
+  getSales,
+} = require('../controllers/ordersController');
 
 // POST   /api/orders            — customer places an order
 router.post('/', verifyToken, requireRole('customer'), createOrder);
 
 router.post('/checkout', verifyToken, requireRole('customer'), checkout);
+router.post('/checkout-cart', verifyToken, requireRole('customer'), checkoutCart);
 router.post('/verify-payment', verifyToken, requireRole('customer'), verifyPayment);
 
 // GET    /api/orders/mine       — customer sees their purchase history
@@ -19,8 +29,12 @@ router.post('/:id/review', verifyToken, requireRole('customer'), createReview);
 
 // GET    /api/orders/shop       — artisan sees incoming orders on their shop
 router.get('/shop', verifyToken, requireRole('artisan'), getShopOrders);
+router.get('/sales', verifyToken, requireRole('artisan'), getSales);
 
 // PATCH  /api/orders/:id/status — artisan accepts an order or marks it Delivered / Cancelled
 router.patch('/:id/status', verifyToken, requireRole('artisan'), updateOrderStatus);
+router.patch('/:id/live-schedule', verifyToken, requireRole('artisan'), scheduleLive);
+router.get('/:id/timeline', verifyToken, getTimeline);
+router.post('/:id/cod-confirm', verifyToken, requireRole('customer', 'artisan'), confirmCodPayment);
 
 module.exports = router;

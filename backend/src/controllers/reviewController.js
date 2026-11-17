@@ -1,5 +1,7 @@
 const { pool } = require('../config/db');
 const asyncHandler = require('../utils/asyncHandler');
+const { notify } = require('../utils/notify');
+const { audit } = require('../utils/audit');
 
 // POST /api/orders/:id/review
 // Auth: customer only. Body: { rating: 1-5, comment? }
@@ -17,7 +19,9 @@ const createReview = asyncHandler(async (req, res) => {
   }
 
   const [[order]] = await pool.query(
-    'SELECT order_id, product_id, status FROM Orders WHERE order_id = ? AND customer_id = ?',
+    `SELECT o.order_id, o.product_id, o.status, p.name AS product_name, s.artisan_id
+     FROM Orders o JOIN Products p ON p.product_id = o.product_id JOIN Shops s ON s.shop_id = o.shop_id
+     WHERE o.order_id = ? AND o.customer_id = ?`,
     [req.params.id, req.user.user_id]
   );
   if (!order) return res.status(404).json({ success: false, message: 'Order not found' });
@@ -36,6 +40,9 @@ const createReview = asyncHandler(async (req, res) => {
     }
     throw err;
   }
+
+  await notify(order.artisan_id, 'new_review', { product_id: order.product_id, product_name: order.product_name, rating }, `/product/${order.product_id}`);
+  await audit(req, 'review.create', { entity: 'order', entityId: order.order_id, details: { rating } });
 
   const [[review]] = await pool.query(
     'SELECT rating, comment, created_at FROM Reviews WHERE order_id = ?',

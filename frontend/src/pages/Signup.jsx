@@ -5,35 +5,27 @@ import Icon from '../components/Icon';
 import { Field, Input } from '../components/Field';
 import AuthLayout from '../components/AuthLayout';
 import { useAuth } from '../context/AuthContext';
+import { useT } from '../i18n';
 
 const ROLES = [
-  {
-    value: 'customer',
-    title: 'I want to buy',
-    blurb: 'Browse makers near you',
-    icon: 'compass',
-  },
-  {
-    value: 'artisan',
-    title: 'I want to sell',
-    blurb: 'Open a shop, list your craft',
-    icon: 'store',
-  },
+  { value: 'customer', icon: 'compass' },
+  { value: 'artisan', icon: 'store' },
 ];
 
 // Mirrors the backend's own validation so the user hears about a bad
 // phone number before a round trip, not after.
-function validate({ name, phone, password }) {
+function validate({ name, phone, password }, t) {
   const errors = {};
-  if (!name.trim()) errors.name = 'Please enter your name';
-  if (!/^[0-9]{10,15}$/.test(phone.trim())) errors.phone = 'Enter 10–15 digits, no spaces';
-  if (password.length < 6) errors.password = 'At least 6 characters';
+  if (!name.trim()) errors.name = t('auth.err_name');
+  if (!/^[0-9]{10,15}$/.test(phone.trim())) errors.phone = t('auth.err_phone');
+  if (password.length < 6) errors.password = t('auth.password_hint');
   return errors;
 }
 
 export default function Signup() {
   const { register } = useAuth();
   const navigate = useNavigate();
+  const { t } = useT();
 
   const [role, setRole] = useState('customer');
   const [form, setForm] = useState({ name: '', phone: '', password: '' });
@@ -50,7 +42,7 @@ export default function Signup() {
     e.preventDefault();
     setApiError('');
 
-    const found = validate(form);
+    const found = validate(form, t);
     setErrors(found);
     if (Object.keys(found).length) return;
 
@@ -75,7 +67,7 @@ export default function Signup() {
     <AuthLayout>
       <Link
         to="/"
-        aria-label="Back"
+        aria-label={t('common.back')}
         className="-ml-2 grid h-9 w-9 place-items-center rounded-full text-ink-500 transition hover:bg-cream-200"
       >
         <Icon name="back" />
@@ -83,14 +75,14 @@ export default function Signup() {
 
       <div className="mt-6 animate-fade-up">
         <h1 className="font-display text-[32px] font-semibold leading-tight text-ink-800">
-          Create your account
+          {t('auth.signup_title')}
         </h1>
-        <p className="mt-1.5 text-[14.5px] text-ink-400">Takes about thirty seconds.</p>
+        <p className="mt-1.5 text-[14.5px] text-ink-400">{t('auth.signup_hint')}</p>
       </div>
 
       <form onSubmit={handleSubmit} className="mt-7 space-y-4">
         <fieldset>
-          <legend className="field-label">I'm here to…</legend>
+          <legend className="field-label">{t('auth.here_to')}</legend>
           <div className="grid grid-cols-2 gap-2.5">
             {ROLES.map((r) => {
               const active = role === r.value;
@@ -117,16 +109,16 @@ export default function Signup() {
                       active ? 'text-clay-700' : 'text-ink-700'
                     }`}
                   >
-                    {r.title}
+                    {t(`auth.role_${r.value}`)}
                   </p>
-                  <p className="mt-0.5 text-[11.5px] leading-tight text-ink-400">{r.blurb}</p>
+                  <p className="mt-0.5 text-[11.5px] leading-tight text-ink-400">{t(`auth.role_${r.value}_hint`)}</p>
                 </button>
               );
             })}
           </div>
         </fieldset>
 
-        <Field label="Full name" id="name" error={errors.name}>
+        <Field label={t('checkout.full_name')} id="name" error={errors.name}>
           <Input
             id="name"
             name="name"
@@ -137,7 +129,7 @@ export default function Signup() {
           />
         </Field>
 
-        <Field label="Phone number" id="phone" error={errors.phone} hint="This is also your login ID">
+        <Field label={t('auth.phone')} id="phone" error={errors.phone} hint={t('auth.phone_hint')}>
           <Input
             id="phone"
             name="phone"
@@ -150,7 +142,7 @@ export default function Signup() {
           />
         </Field>
 
-        <Field label="Password" id="password" error={errors.password} hint="At least 6 characters">
+        <Field label={t('auth.password')} id="password" error={errors.password} hint={t('auth.password_hint')}>
           <Input
             id="password"
             name="password"
@@ -170,14 +162,14 @@ export default function Signup() {
         )}
 
         <Button type="submit" size="lg" loading={busy} className="w-full !mt-6">
-          {role === 'artisan' ? 'Create shop account' : 'Start browsing'}
+          {role === 'artisan' ? t('auth.create_shop_account') : t('auth.start_browsing')}
         </Button>
       </form>
 
       <p className="mt-6 text-center text-[13.5px] text-ink-400">
-        Already registered?{' '}
+        {t('auth.have_account')}{' '}
         <Link to="/login" className="font-semibold text-clay-600 underline-offset-4 hover:underline">
-          Log in
+          {t('auth.login')}
         </Link>
       </p>
     </AuthLayout>

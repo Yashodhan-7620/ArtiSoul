@@ -5,11 +5,13 @@ import Icon from '../components/Icon';
 import { Field, Input } from '../components/Field';
 import AuthLayout from '../components/AuthLayout';
 import { useAuth } from '../context/AuthContext';
+import { useT } from '../i18n';
 
 export default function Login() {
   const { login } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
+  const { t } = useT();
 
   const [form, setForm] = useState({ phone: '', password: '' });
   const [error, setError] = useState('');
@@ -23,7 +25,7 @@ export default function Login() {
     setBusy(true);
     try {
       const data = await login(form.phone.trim(), form.password);
-      const fallback = data.user.role === 'artisan' ? '/artisan' : '/feed';
+      const fallback = { artisan: '/artisan', admin: '/admin' }[data.user.role] || '/feed';
       navigate(location.state?.from || fallback, { replace: true });
     } catch (err) {
       setError(err.message);
@@ -36,7 +38,7 @@ export default function Login() {
     <AuthLayout>
       <Link
         to="/"
-        aria-label="Back"
+        aria-label={t('common.back')}
         className="-ml-2 grid h-9 w-9 place-items-center rounded-full text-ink-500 transition hover:bg-cream-200"
       >
         <Icon name="back" />
@@ -44,15 +46,13 @@ export default function Login() {
 
       <div className="mt-6 animate-fade-up">
         <h1 className="font-display text-[32px] font-semibold leading-tight text-ink-800">
-          Welcome back
+          {t('auth.welcome_back')}
         </h1>
-        <p className="mt-1.5 text-[14.5px] text-ink-400">
-          Log in with the phone number you signed up with.
-        </p>
+        <p className="mt-1.5 text-[14.5px] text-ink-400">{t('auth.login_hint')}</p>
       </div>
 
       <form onSubmit={handleSubmit} className="mt-8 space-y-4">
-        <Field label="Phone number" id="phone">
+        <Field label={t('auth.phone')} id="phone">
           <Input
             id="phone"
             name="phone"
@@ -66,7 +66,7 @@ export default function Login() {
           />
         </Field>
 
-        <Field label="Password" id="password">
+        <Field label={t('auth.password')} id="password">
           <Input
             id="password"
             name="password"
@@ -87,14 +87,14 @@ export default function Login() {
         )}
 
         <Button type="submit" size="lg" loading={busy} className="w-full !mt-6">
-          Log in
+          {t('auth.login')}
         </Button>
       </form>
 
       <p className="mt-6 text-center text-[13.5px] text-ink-400">
-        New to ArtiSoul?{' '}
+        {t('auth.new_here')}{' '}
         <Link to="/signup" className="font-semibold text-clay-600 underline-offset-4 hover:underline">
-          Create an account
+          {t('auth.create_account')}
         </Link>
       </p>
     </AuthLayout>

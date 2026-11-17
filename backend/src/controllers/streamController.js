@@ -1,5 +1,8 @@
 const { pool } = require('../config/db');
 const asyncHandler = require('../utils/asyncHandler');
+const { addOrderEvent } = require('../utils/orderEvents');
+const { notify } = require('../utils/notify');
+const { audit } = require('../utils/audit');
 
 // Private order livestreams.
 //
@@ -25,8 +28,8 @@ function validSdp(desc, type) {
 // The order, if the caller is its artisan (via shop ownership) or its customer.
 async function findOrderFor(orderId, user) {
   const [[order]] = await pool.query(
-    `SELECT o.order_id, o.customer_id, o.status, s.artisan_id
-     FROM Orders o JOIN Shops s ON s.shop_id = o.shop_id
+    `SELECT o.order_id, o.customer_id, o.status, s.artisan_id, p.name AS product_name
+     FROM Orders o JOIN Shops s ON s.shop_id = o.shop_id JOIN Products p ON p.product_id = o.product_id
      WHERE o.order_id = ? AND (s.artisan_id = ? OR o.customer_id = ?)`,
     [orderId, user.user_id, user.user_id]
   );
@@ -61,6 +64,7 @@ const startStream = asyncHandler(async (req, res) => {
     return res.status(400).json({ success: false, message: 'A valid WebRTC offer is required' });
   }
 
+  const wasLive = (await getStream(order.order_id))?.status === 'live';
   await pool.query(
     `INSERT INTO LiveStreams (order_id, artisan_id, customer_id, status, version, offer, answer)
      VALUES (?, ?, ?, 'live', 1, ?, NULL)
@@ -68,6 +72,12 @@ const startStream = asyncHandler(async (req, res) => {
                              offer = VALUES(offer), answer = NULL, started_at = CURRENT_TIMESTAMP`,
     [order.order_id, order.artisan_id, order.customer_id, JSON.stringify(req.body.offer)]
   );
+  // Tell the buyer once per session (not on every reconnect/restart).
+  if (!wasLive) {
+    await addOrderEvent(order.order_id, 'LiveStarted', { actorId: req.user.user_id });
+    await notify(order.customer_id, 'live_now', { order_id: order.order_id, product_name: order.product_name }, '/purchases');
+    await audit(req, 'stream.start', { entity: 'order', entityId: order.order_id });
+  }
   const stream = await getStream(order.order_id);
   res.status(201).json({ success: true, data: { status: stream.status, version: stream.version } });
 });
@@ -162,6 +172,7 @@ const endStream = asyncHandler(async (req, res) => {
     "UPDATE LiveStreams SET status = 'ended', offer = NULL, answer = NULL WHERE order_id = ?",
     [order.order_id]
   );
+  await audit(req, 'stream.end', { entity: 'order', entityId: order.order_id });
   res.json({ success: true, data: { status: 'ended' } });
 });
 

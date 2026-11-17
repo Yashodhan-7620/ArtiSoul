@@ -8,12 +8,16 @@ import { Container } from '../components/AppShell';
 import { api } from '../lib/api';
 import { useGeolocation } from '../lib/useGeolocation';
 import { useAuth } from '../context/AuthContext';
+import { useT } from '../i18n';
+import Recommendations from '../components/Recommendations';
+import LanguageSwitcher from '../components/LanguageSwitcher';
 
 const RADII = [1, 3, 5, 10, 25];
 
 export default function Feed() {
   const { user } = useAuth();
   const { coords, status, locate } = useGeolocation();
+  const { t, tc } = useT();
 
   const [radius, setRadius] = useState(5);
   const [category, setCategory] = useState(null);
@@ -78,20 +82,23 @@ export default function Feed() {
           <div className="flex items-start justify-between gap-4">
             <div className="min-w-0">
               <p className="text-[11.5px] font-bold uppercase tracking-[0.12em] text-clay-500">
-                {user ? `Hello, ${user.name.split(' ')[0]}` : 'Discover'}
+                {user ? t('feed.hello', { name: user.name.split(' ')[0] }) : t('nav.discover')}
               </p>
               <h1 className="mt-0.5 font-display text-[25px] font-semibold leading-tight text-ink-800 md:text-[30px]">
-                Made near you
+                {t('feed.title')}
               </h1>
             </div>
 
-            {!user && (
-              <Link to="/login" className="lg:hidden">
-                <Button size="sm" variant="secondary">
-                  Log in
-                </Button>
-              </Link>
-            )}
+            <div className="flex shrink-0 items-center gap-2">
+              <LanguageSwitcher compact className="lg:hidden" />
+              {!user && (
+                <Link to="/login" className="lg:hidden">
+                  <Button size="sm" variant="secondary">
+                    {t('auth.login')}
+                  </Button>
+                </Link>
+              )}
+            </div>
           </div>
 
           {/* Location + search sit side by side once there's room */}
@@ -106,7 +113,7 @@ export default function Feed() {
                 className={`h-3.5 w-3.5 text-clay-500 ${status === 'locating' ? 'animate-pulse' : ''}`}
                 strokeWidth={2}
               />
-              {status === 'locating' ? 'Finding you…' : coords.label}
+              {status === 'locating' ? t('feed.locating') : coords.label}
               <Icon name="refresh" className="h-3 w-3 text-ink-400" strokeWidth={2.2} />
             </button>
 
@@ -118,8 +125,8 @@ export default function Feed() {
               <input
                 value={query}
                 onChange={(e) => setQuery(e.target.value)}
-                placeholder="Search sarees, pottery, a shop…"
-                aria-label="Search products"
+                placeholder={t('feed.search')}
+                aria-label={t('feed.search_label')}
                 className="field-input !py-2.5 !pl-10 !text-[14px]"
               />
             </div>
@@ -152,7 +159,7 @@ export default function Feed() {
                     : 'border-cream-300 bg-white text-ink-500 hover:border-clay-300'
                 }`}
               >
-                {c}
+                {tc(c)}
               </button>
             ))}
           </div>
@@ -171,24 +178,20 @@ export default function Feed() {
           ) : error ? (
             <EmptyState
               icon="alert"
-              title="Couldn't load the feed"
+              title={t('feed.load_error')}
               message={error}
               action={
                 <Button onClick={load} variant="secondary">
                   <Icon name="refresh" className="h-4 w-4" />
-                  Try again
+                  {t('common.retry')}
                 </Button>
               }
             />
           ) : visible.length === 0 ? (
             <EmptyState
               icon="compass"
-              title={filtering ? 'Nothing matches that' : 'No makers within range'}
-              message={
-                filtering
-                  ? 'Try a different word, or clear the filters.'
-                  : `Nothing listed within ${radius} km yet. Widening the radius usually helps.`
-              }
+              title={filtering ? t('feed.no_match') : t('feed.none_in_range')}
+              message={filtering ? t('feed.no_match_body') : t('feed.none_in_range_body', { radius })}
               action={
                 filtering ? (
                   <Button
@@ -198,18 +201,23 @@ export default function Feed() {
                       setCategory(null);
                     }}
                   >
-                    Clear filters
+                    {t('feed.clear')}
                   </Button>
                 ) : radius < 25 ? (
-                  <Button onClick={() => setRadius(25)}>Search within 25 km</Button>
+                  <Button onClick={() => setRadius(25)}>{t('feed.widen', { radius: 25 })}</Button>
                 ) : null
               }
             />
           ) : (
             <>
+              {!filtering && (
+                <div className="mb-6">
+                  <Recommendations coords={coords} />
+                </div>
+              )}
               <p className="mb-3 text-[12.5px] font-medium text-ink-400">
-                {visible.length} {visible.length === 1 ? 'piece' : 'pieces'} within {radius} km
-                {category ? ` · ${category}` : ''}
+                {t('feed.count', { count: visible.length, radius })}
+                {category ? ` · ${tc(category)}` : ''}
               </p>
 
               {/* One column on a phone, filling out to four on a wide monitor */}
@@ -226,7 +234,7 @@ export default function Feed() {
               </div>
 
               <p className="py-8 text-center text-[12.5px] text-ink-400">
-                That's everything within {radius} km.
+                {t('feed.end', { radius })}
               </p>
             </>
           )}
